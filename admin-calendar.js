@@ -28,6 +28,7 @@
     .calendar-slot-actions button{padding:7px 10px;font-size:12px}
     .calendar-details{margin-top:5px;color:var(--muted);font-size:13px}
     .calendar-back{margin-bottom:8px}
+    .two-months{display:grid;grid-template-columns:1fr 1fr;gap:16px}.month-card{border:1px solid var(--line);border-radius:15px;padding:12px;background:#fff}.month-card h3{text-align:center;margin:4px 0 12px}.month-weekdays,.month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.month-weekdays div{text-align:center;font-size:11px;font-weight:800;color:var(--muted);padding:4px}.month-cell{min-height:76px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:5px;text-align:left;cursor:pointer;overflow:hidden}.month-cell.empty{border-color:transparent;background:transparent;cursor:default}.month-cell.closed{background:#fde8e8}.month-cell.has-booking{background:#f3f8f5}.month-num{font-weight:850}.month-event{font-size:10px;line-height:1.25;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.month-event.pending{color:#866609}.month-event.confirmed{color:#176b3a}.month-more{font-size:10px;color:var(--muted);margin-top:3px}.jump-date{display:flex;gap:8px;align-items:end;flex-wrap:wrap}.jump-date label{margin:0}.jump-date input{margin-top:4px}.jump-date button{margin-bottom:0}.calendar-limit{font-size:12px;color:var(--muted)}@media(max-width:700px){.two-months{grid-template-columns:1fr}}
     @media(max-width:520px){.calendar-entry{grid-template-columns:72px 1fr}.calendar-slot-time{min-width:72px}.calendar-toolbar>button{width:100%}}
   `;
   document.head.appendChild(css);
@@ -212,7 +213,41 @@
     content.querySelectorAll('[data-slot-open]').forEach(b=>b.onclick=()=>setSlotException(b.dataset.date,b.dataset.time,'open'));
   }
 
+  function monthStart(d){return new Date(d.getFullYear(),d.getMonth(),1)}
+  function monthEndExclusive(d){return new Date(d.getFullYear(),d.getMonth()+1,1)}
+  function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,1)}
+  function withinTwoMonthWindow(d){const today=startOfDay(new Date());const max=new Date(today.getFullYear(),today.getMonth()+3,0,23,59,59);return d>=today&&d<=max}
+  function renderMonth(month,data){
+    const first=monthStart(month), next=monthEndExclusive(month), offset=isoDay(first)-1;
+    const cells=Array(offset).fill('<div class="month-cell empty"></div>');
+    for(let d=new Date(first);d<next;d=addDays(d,1)){
+      const key=localDateKey(d), bookings=data.bookings.filter(b=>localDateKey(new Date(b.starts_at))===key), closed=isDayClosed(d,data);
+      const events=bookings.slice(0,3).map(b=>`<div class="month-event ${b.status}">${hhmm(b.starts_at)} ${esc(b.service_name)} · ${b.participant_count||1}</div>`).join('');
+      cells.push(`<button type="button" class="month-cell ${closed?'closed':''} ${bookings.length?'has-booking':''}" data-month-day="${key}"><div class="month-num">${d.getDate()}${closed?' · ⛔':''}</div>${events}${bookings.length>3?`<div class="month-more">+${bookings.length-3} más</div>`:''}</button>`);
+    }
+    return `<section class="month-card"><h3>${first.toLocaleDateString('es-ES',{month:'long',year:'numeric'})}</h3><div class="month-weekdays"><div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div></div><div class="month-grid">${cells.join('')}</div></section>`;
+  }
+  async function openTwoMonths(){
+    calendarMode='months';
+    const today=startOfDay(new Date()), first=monthStart(today), second=addMonths(first,1), to=addMonths(first,2);
+    content.innerHTML='<div class="card muted">Cargando 2 meses…</div>';
+    try{
+      const data=await loadCalendarData(first,to);
+      content.innerHTML=`<button id="calendarBack" class="ghost calendar-back" type="button">← Volver a solicitudes</button>
+        <div class="calendar-toolbar"><div class="calendar-toolbar-group"><button class="ghost" data-calendar-mode="today" type="button">Hoy</button><button class="ghost" data-calendar-mode="week" type="button">Semana</button><button class="secondary" type="button">2 meses</button></div>
+        <div class="jump-date"><label>Ir a fecha<input id="jumpDate" type="date" min="${localDateKey(today)}" max="${localDateKey(new Date(today.getFullYear(),today.getMonth()+3,0))}"></label><button id="jumpBtn" class="ghost" type="button">Ir</button></div></div>
+        <div class="notice">Vista de planificación: pulsa cualquier día para abrir su detalle. Se muestran el mes actual y el siguiente.</div>
+        <div class="two-months">${renderMonth(first,data)}${renderMonth(second,data)}</div>`;
+      document.querySelector('#pageTitle').textContent='Calendario · 2 meses';
+      document.querySelector('#calendarBack').onclick=()=>setView('admin');
+      content.querySelectorAll('[data-calendar-mode]').forEach(x=>x.onclick=()=>openCalendar(x.dataset.calendarMode));
+      content.querySelectorAll('[data-month-day]').forEach(x=>x.onclick=()=>{anchorDate=startOfDay(new Date(x.dataset.monthDay+'T12:00:00'));openCalendar('today')});
+      document.querySelector('#jumpBtn').onclick=()=>{const v=document.querySelector('#jumpDate').value;if(!v)return toast('Selecciona una fecha.');const d=startOfDay(new Date(v+'T12:00:00'));if(!withinTwoMonthWindow(d))return toast('Selecciona una fecha dentro de los próximos 2 meses.');anchorDate=d;openCalendar('today')};
+    }catch(e){console.error(e);content.innerHTML='<button id="calendarBack" class="ghost">← Volver</button><div class="card error">No se pudo cargar la vista de 2 meses.</div>';document.querySelector('#calendarBack').onclick=()=>setView('admin')}
+  }
+
   async function openCalendar(mode=calendarMode){
+    if(mode==='months') return openTwoMonths();
     calendarMode=mode;
     const from=mode==='today'?startOfDay(anchorDate):startOfDay(addDays(anchorDate,1-isoDay(anchorDate)));
     const days=mode==='today'?1:7;const to=addDays(from,days);
@@ -220,7 +255,7 @@
     try{
       const data=await loadCalendarData(from,to);
       content.innerHTML=`<button id="calendarBack" class="ghost calendar-back" type="button">← Volver a solicitudes</button>
-        <div class="calendar-toolbar"><div class="calendar-toolbar-group"><button class="${mode==='today'?'secondary':'ghost'}" data-calendar-mode="today" type="button">Hoy</button><button class="${mode==='week'?'secondary':'ghost'}" data-calendar-mode="week" type="button">Semana</button></div><div class="calendar-toolbar-group"><button id="calendarPrev" class="ghost" type="button">←</button><button id="calendarCurrent" class="ghost" type="button">Hoy</button><button id="calendarNext" class="ghost" type="button">→</button></div></div>
+        <div class="calendar-toolbar"><div class="calendar-toolbar-group"><button class="${mode==='today'?'secondary':'ghost'}" data-calendar-mode="today" type="button">Hoy</button><button class="${mode==='week'?'secondary':'ghost'}" data-calendar-mode="week" type="button">Semana</button><button class="ghost" data-calendar-mode="months" type="button">2 meses</button></div><div class="calendar-toolbar-group"><button id="calendarPrev" class="ghost" type="button">←</button><button id="calendarCurrent" class="ghost" type="button">Hoy</button><button id="calendarNext" class="ghost" type="button">→</button></div></div>
         <div class="notice">El calendario muestra el patrón de invierno y bloquea visualmente los solapamientos por la duración real de cada reserva.</div>
         ${Array.from({length:days},(_,i)=>renderDay(addDays(from,i),data)).join('')}`;
       document.querySelector('#pageTitle').textContent='Calendario';
@@ -237,4 +272,3 @@
 
   const timer=setInterval(()=>{if(state.profile){installCalendarButton();clearInterval(timer)}},250);
 })();
-
