@@ -70,3 +70,4 @@
 
   const timer=setInterval(()=>{if(state?.profile){installProfileNav();clearInterval(timer)}},150);
 })();
+
