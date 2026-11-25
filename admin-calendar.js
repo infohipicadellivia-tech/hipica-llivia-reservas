@@ -176,7 +176,21 @@
     const currentData=await loadCalendarData(new Date(date+'T00:00:00'),addDays(new Date(date+'T00:00:00'),1));
     const alternatives=currentData.services.filter(x=>x.id!==currentServiceId && (/clase/i.test(x.name)||/ruta|paseo/i.test(x.name)));
     if(!alternatives.length) return toast('No hay otra actividad disponible.');
-    const target=alternatives[0];
+    showFlexibleServicePicker(date,time,alternatives);
+  }
+
+  function showFlexibleServicePicker(date,time,alternatives){
+    content.innerHTML=`<button id="backFlexible" class="ghost" type="button">← Volver al calendario</button>
+      <h2>Cambiar actividad</h2>
+      <div class="notice">Cambio puntual para ${new Date(date+'T12:00:00').toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})} a las ${time}. El patrón habitual no cambia.</div>
+      ${alternatives.map(x=>`<button class="service-card" data-flex-target="${x.id}" type="button"><h3>${esc(x.name)}</h3><div class="muted">${x.duration_minutes||60} min</div></button>`).join('')}`;
+    document.querySelector('#backFlexible').onclick=()=>openCalendar(calendarMode);
+    content.querySelectorAll('[data-flex-target]').forEach(b=>b.onclick=()=>applyFlexibleService(date,time,b.dataset.flexTarget,alternatives));
+  }
+
+  async function applyFlexibleService(date,time,serviceId,alternatives){
+    const target=alternatives.find(x=>x.id===serviceId);
+    if(!target) return;
     if(!confirm(`¿Cambiar puntualmente ${date} ${time} a ${target.name}?`)) return;
     const {error}=await db.rpc('set_flexible_slot_service',{p_override_date:date,p_start_time:time,p_service_id:target.id});
     if(error){console.error(error);return toast((error.message||'').includes('SLOT_HAS_BOOKINGS')?'No se puede cambiar: ya hay reservas en esta franja.':'No se pudo cambiar la actividad.');}
@@ -223,3 +237,4 @@
 
   const timer=setInterval(()=>{if(state.profile){installCalendarButton();clearInterval(timer)}},250);
 })();
+
