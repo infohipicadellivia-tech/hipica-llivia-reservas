@@ -12,6 +12,9 @@
     .calendar-day{border:1px solid var(--line);border-radius:15px;margin:12px 0;overflow:hidden;background:#fff}
     .calendar-day-head{padding:12px 14px;background:#edf5f1;display:flex;justify-content:space-between;align-items:center;gap:10px}
     .calendar-day-head h3{margin:0}
+    .calendar-day-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+    .calendar-day.closed-day{opacity:.82}
+    .calendar-day.closed-day .calendar-day-head{background:#fde8e8}
     .calendar-slot{padding:12px 14px;border-top:1px solid var(--line)}
     .calendar-slot:first-of-type{border-top:0}
     .calendar-slot-time{font-weight:850;color:var(--green);min-width:92px}
@@ -82,6 +85,13 @@
     return latest ? latest.exception_type==='closed' : false;
   }
 
+  function isDayClosed(date,data){
+    const key=localDateKey(date);
+    const matching=data.exceptions.filter(e=>e.exception_date===key&&!e.start_time);
+    const latest=matching[matching.length-1];
+    return latest ? latest.exception_type==='closed' : false;
+  }
+
   function overlaps(start,end,b){return start<new Date(b.ends_at)&&end>new Date(b.starts_at)}
 
   function renderDay(date,data){
@@ -112,7 +122,8 @@
     }
     const unslotted=dayBookings.filter(b=>!rules.some(r=>Math.abs(localDateTime(date,r.start_time.slice(0,5))-new Date(b.starts_at))<60000));
     for(const b of unslotted){pieces.push(`<div class="calendar-slot calendar-booked"><div class="calendar-entry"><div class="calendar-slot-time">${hhmm(b.starts_at)}</div><div><strong>${esc(b.service_name)}</strong><div class="calendar-details">${hhmm(b.starts_at)}–${hhmm(b.ends_at)} · ${b.participant_count||1} participante(s) · ${esc(b.status)}</div></div></div></div>`)}
-    return `<section class="calendar-day"><div class="calendar-day-head"><h3>${DAY_NAMES[isoDay(date)]} ${date.toLocaleDateString('es-ES',{day:'numeric',month:'short'})}</h3><span>${dayBookings.length} reserva(s)</span></div>${pieces.length?pieces.join(''):'<div class="calendar-slot calendar-free">Día cerrado o sin reglas.</div>'}</section>`;
+    const dayClosed=isDayClosed(date,data);
+    return `<section class="calendar-day ${dayClosed?'closed-day':''}"><div class="calendar-day-head"><h3>${DAY_NAMES[isoDay(date)]} ${date.toLocaleDateString('es-ES',{day:'numeric',month:'short'})}${dayClosed?' · CERRADO':''}</h3><div class="calendar-day-actions"><span>${dayBookings.length} reserva(s)</span>${dayClosed?`<button class="secondary" data-day-open="1" data-date="${localDateKey(date)}" type="button">Abrir día</button>`:`<button class="ghost" data-day-close="1" data-date="${localDateKey(date)}" data-bookings="${dayBookings.length}" type="button">Cerrar día</button>`}</div></div>${pieces.length?pieces.join(''):'<div class="calendar-slot calendar-free">Día cerrado o sin reglas.</div>'}</section>`;
   }
 
   async function setSlotException(date,time,type){
@@ -128,6 +139,31 @@
     if(error){console.error(error);return toast((error.message||'').includes('FORBIDDEN')?'Tu usuario no tiene rol admin/staff.':'No se pudo actualizar la franja.');}
     toast(type==='closed'?'Franja cerrada.':'Franja abierta.');
     await openCalendar(calendarMode);
+  }
+
+  async function setDayException(date,type,bookingCount){
+    if(!isAdminUser()) return toast('No tienes permisos de administración.');
+    let msg=type==='closed'
+      ? `¿Quieres cerrar el ${new Date(date+'T12:00:00').toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})} completo?`
+      : `¿Quieres volver a abrir el ${new Date(date+'T12:00:00').toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})}?`;
+    if(type==='closed' && Number(bookingCount)>0){
+      msg += `\n\nATENCIÓN: hay ${bookingCount} reserva(s) activa(s). Cerrar el día NO las cancela ni devuelve/consume bonos. Debes gestionarlas por separado.`;
+    }
+    if(!confirm(msg)) return;
+    const {error}=await db.rpc('set_calendar_exception',{
+      p_exception_date:date,
+      p_start_time:null,
+      p_exception_type:type,
+      p_reason:type==='closed'?'Día cerrado desde calendario':'Día reabierto desde calendario'
+    });
+    if(error){console.error(error);return toast('No se pudo actualizar el día.');}
+    toast(type==='closed'?'Día cerrado.':'Día abierto.');
+    await openCalendar(calendarMode);
+  }
+
+  function bindDayActions(){
+    content.querySelectorAll('[data-day-close]').forEach(b=>b.onclick=()=>setDayException(b.dataset.date,'closed',b.dataset.bookings));
+    content.querySelectorAll('[data-day-open]').forEach(b=>b.onclick=()=>setDayException(b.dataset.date,'open',0));
   }
 
   function bindSlotActions(){
@@ -153,6 +189,7 @@
       document.querySelector('#calendarNext').onclick=()=>{anchorDate=addDays(anchorDate,mode==='today'?1:7);openCalendar(mode)};
       document.querySelector('#calendarCurrent').onclick=()=>{anchorDate=startOfDay(new Date());openCalendar(mode)};
       bindSlotActions();
+      bindDayActions();
     }catch(e){console.error(e);content.innerHTML='<button id="calendarBack" class="ghost" type="button">← Volver</button><div class="card error">No se pudo cargar el calendario. Verifica que ejecutaste motor_calendario_v1.sql.</div>';document.querySelector('#calendarBack').onclick=()=>setView('admin')}
   }
 
