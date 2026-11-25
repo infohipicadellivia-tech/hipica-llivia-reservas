@@ -57,15 +57,17 @@
 
   async function loadCalendarData(from,to){
     const fromIso=from.toISOString();const toIso=to.toISOString();
-    const [rulesRes,bookingsRes,exceptionsRes,periodsRes]=await Promise.all([
+    const [rulesRes,bookingsRes,exceptionsRes,periodsRes,overridesRes,servicesRes]=await Promise.all([
       db.from('schedule_rules').select('*,services:preferred_service_id(name,duration_minutes)').eq('active',true).order('start_time'),
       db.from('booking_schedule').select('*').in('status',['pending','confirmed']).gte('starts_at',fromIso).lt('starts_at',toIso).order('starts_at'),
       db.from('calendar_exceptions').select('*').gte('exception_date',localDateKey(from)).lte('exception_date',localDateKey(addDays(to,-1))),
-      db.from('special_periods').select('*').eq('active',true).lte('starts_on',localDateKey(addDays(to,-1))).gte('ends_on',localDateKey(from))
+      db.from('special_periods').select('*').eq('active',true).lte('starts_on',localDateKey(addDays(to,-1))).gte('ends_on',localDateKey(from)),
+      db.from('slot_service_overrides').select('*,services:service_id(name,duration_minutes)').gte('override_date',localDateKey(from)).lte('override_date',localDateKey(addDays(to,-1))),
+      db.from('services').select('id,name,duration_minutes').eq('active',true)
     ]);
-    const error=[rulesRes,bookingsRes,exceptionsRes,periodsRes].find(x=>x.error)?.error;
+    const error=[rulesRes,bookingsRes,exceptionsRes,periodsRes,overridesRes,servicesRes].find(x=>x.error)?.error;
     if(error) throw error;
-    return {rules:rulesRes.data||[],bookings:bookingsRes.data||[],exceptions:exceptionsRes.data||[],periods:periodsRes.data||[]};
+    return {rules:rulesRes.data||[],bookings:bookingsRes.data||[],exceptions:exceptionsRes.data||[],periods:periodsRes.data||[],overrides:overridesRes.data||[],services:servicesRes.data||[]};
   }
 
   function ruleApplies(rule,date,data){
@@ -100,19 +102,23 @@
     const pieces=[];
     for(const rule of rules){
       const time=rule.start_time.slice(0,5);
+      const override=data.overrides.find(o=>o.override_date===localDateKey(date)&&o.start_time.slice(0,5)===time);
+      const effectiveService=override?.services||rule.services;
+      const effectiveServiceId=override?.service_id||rule.preferred_service_id;
       const closed=isClosed(date,time,data);
       const start=localDateTime(date,time);
-      const duration=rule.services?.duration_minutes||60;
+      const duration=effectiveService?.duration_minutes||60;
       const end=new Date(start.getTime()+duration*60000);
       const overlapsHere=closed?[]:dayBookings.filter(b=>overlaps(start,end,b));
       const exact=dayBookings.filter(b=>Math.abs(new Date(b.starts_at)-start)<60000);
       const conflict=overlapsHere.length>1;
       pieces.push(`<div class="calendar-slot ${closed?'calendar-closed':(overlapsHere.length?'calendar-booked':'calendar-free')}">
         <div class="calendar-entry"><div class="calendar-slot-time">${time}</div><div>
-          <div class="row"><strong>${esc(rule.services?.name||'Actividad')}</strong><span class="calendar-badge ${rule.flexible?'flex':''}">${rule.flexible?'Flexible':'Preferente'}</span></div>
+          <div class="row"><strong>${esc(effectiveService?.name||'Actividad')}</strong><span class="calendar-badge ${rule.flexible?'flex':''}">${rule.flexible?'Flexible':'Preferente'}</span></div>
           ${closed?'<div class="calendar-details"><strong>Franja cerrada</strong></div>':(exact.length?exact.map(b=>`<div class="calendar-details"><strong>${esc(b.service_name)}</strong> · ${hhmm(b.starts_at)}–${hhmm(b.ends_at)} · ${b.participant_count||1} participante(s) · ${esc(b.status)}</div>`).join(''):'<div class="calendar-details">Disponible según patrón</div>')}
           ${overlapsHere.filter(b=>!exact.includes(b)).map(b=>`<div class="calendar-details">Bloqueado por ${esc(b.service_name)} ${hhmm(b.starts_at)}–${hhmm(b.ends_at)}</div>`).join('')}
           ${conflict?'<div class="calendar-conflict">⚠ Conflicto: hay actividades solapadas</div>':''}
+          ${rule.flexible && !overlapsHere.length ? `<div class="calendar-slot-actions"><button class="secondary" data-flex-change="1" data-date="${localDateKey(date)}" data-time="${time}" data-current-service="${effectiveServiceId}" type="button">Cambiar ${esc(effectiveService?.name||'actividad')}</button>${override?`<button class="ghost" data-flex-reset="1" data-date="${localDateKey(date)}" data-time="${time}" type="button">Restaurar preferencia</button>`:''}</div>`:''}
           <div class="calendar-slot-actions">
             ${isClosed(date,time,data)
               ? `<button class="secondary" data-slot-open="1" data-date="${localDateKey(date)}" data-time="${time}" type="button">Abrir franja</button>`
@@ -166,6 +172,27 @@
     content.querySelectorAll('[data-day-open]').forEach(b=>b.onclick=()=>setDayException(b.dataset.date,'open',0));
   }
 
+  async function changeFlexibleService(date,time,currentServiceId){
+    const currentData=await loadCalendarData(new Date(date+'T00:00:00'),addDays(new Date(date+'T00:00:00'),1));
+    const alternatives=currentData.services.filter(x=>x.id!==currentServiceId && (/clase/i.test(x.name)||/ruta|paseo/i.test(x.name)));
+    if(!alternatives.length) return toast('No hay otra actividad disponible.');
+    const target=alternatives[0];
+    if(!confirm(`¿Cambiar puntualmente ${date} ${time} a ${target.name}?`)) return;
+    const {error}=await db.rpc('set_flexible_slot_service',{p_override_date:date,p_start_time:time,p_service_id:target.id});
+    if(error){console.error(error);return toast((error.message||'').includes('SLOT_HAS_BOOKINGS')?'No se puede cambiar: ya hay reservas en esta franja.':'No se pudo cambiar la actividad.');}
+    toast(`Franja cambiada a ${target.name}.`); await openCalendar(calendarMode);
+  }
+  async function resetFlexibleService(date,time){
+    if(!confirm('¿Restaurar la actividad preferente de esta franja?')) return;
+    const {error}=await db.rpc('clear_flexible_slot_service',{p_override_date:date,p_start_time:time});
+    if(error){console.error(error);return toast('No se pudo restaurar la actividad.');}
+    toast('Preferencia restaurada.'); await openCalendar(calendarMode);
+  }
+  function bindFlexibleActions(){
+    content.querySelectorAll('[data-flex-change]').forEach(b=>b.onclick=()=>changeFlexibleService(b.dataset.date,b.dataset.time,b.dataset.currentService));
+    content.querySelectorAll('[data-flex-reset]').forEach(b=>b.onclick=()=>resetFlexibleService(b.dataset.date,b.dataset.time));
+  }
+
   function bindSlotActions(){
     content.querySelectorAll('[data-slot-close]').forEach(b=>b.onclick=()=>setSlotException(b.dataset.date,b.dataset.time,'closed'));
     content.querySelectorAll('[data-slot-open]').forEach(b=>b.onclick=()=>setSlotException(b.dataset.date,b.dataset.time,'open'));
@@ -190,6 +217,7 @@
       document.querySelector('#calendarCurrent').onclick=()=>{anchorDate=startOfDay(new Date());openCalendar(mode)};
       bindSlotActions();
       bindDayActions();
+      bindFlexibleActions();
     }catch(e){console.error(e);content.innerHTML='<button id="calendarBack" class="ghost" type="button">← Volver</button><div class="card error">No se pudo cargar el calendario. Verifica que ejecutaste motor_calendario_v1.sql.</div>';document.querySelector('#calendarBack').onclick=()=>setView('admin')}
   }
 
