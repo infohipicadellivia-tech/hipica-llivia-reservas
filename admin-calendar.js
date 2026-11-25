@@ -21,6 +21,8 @@
     .calendar-conflict{background:#fde8e8;color:#8f1d1d;border-radius:8px;padding:7px;margin-top:8px;font-weight:750}
     .calendar-badge{font-size:11px;font-weight:850;border-radius:99px;padding:4px 8px;background:#e6f0eb;color:var(--green)}
     .calendar-badge.flex{background:#fff1c7;color:#755817}
+    .calendar-slot-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+    .calendar-slot-actions button{padding:7px 10px;font-size:12px}
     .calendar-details{margin-top:5px;color:var(--muted);font-size:13px}
     .calendar-back{margin-bottom:8px}
     @media(max-width:520px){.calendar-entry{grid-template-columns:72px 1fr}.calendar-slot-time{min-width:72px}.calendar-toolbar>button{width:100%}}
@@ -75,7 +77,9 @@
 
   function isClosed(date,time,data){
     const key=localDateKey(date);
-    return data.exceptions.some(e=>e.exception_date===key&&e.exception_type==='closed'&&(!e.start_time||e.start_time.slice(0,5)===time.slice(0,5)));
+    const matching=data.exceptions.filter(e=>e.exception_date===key&&(!e.start_time||e.start_time.slice(0,5)===time.slice(0,5)));
+    const latest=matching[matching.length-1];
+    return latest ? latest.exception_type==='closed' : false;
   }
 
   function overlaps(start,end,b){return start<new Date(b.ends_at)&&end>new Date(b.starts_at)}
@@ -86,24 +90,44 @@
     const pieces=[];
     for(const rule of rules){
       const time=rule.start_time.slice(0,5);
-      if(isClosed(date,time,data)) continue;
+      const closed=isClosed(date,time,data);
       const start=localDateTime(date,time);
       const duration=rule.services?.duration_minutes||60;
       const end=new Date(start.getTime()+duration*60000);
-      const overlapsHere=dayBookings.filter(b=>overlaps(start,end,b));
+      const overlapsHere=closed?[]:dayBookings.filter(b=>overlaps(start,end,b));
       const exact=dayBookings.filter(b=>Math.abs(new Date(b.starts_at)-start)<60000);
       const conflict=overlapsHere.length>1;
-      pieces.push(`<div class="calendar-slot ${overlapsHere.length?'calendar-booked':'calendar-free'}">
+      pieces.push(`<div class="calendar-slot ${closed?'calendar-closed':(overlapsHere.length?'calendar-booked':'calendar-free')}">
         <div class="calendar-entry"><div class="calendar-slot-time">${time}</div><div>
           <div class="row"><strong>${esc(rule.services?.name||'Actividad')}</strong><span class="calendar-badge ${rule.flexible?'flex':''}">${rule.flexible?'Flexible':'Preferente'}</span></div>
-          ${exact.length?exact.map(b=>`<div class="calendar-details"><strong>${esc(b.service_name)}</strong> · ${hhmm(b.starts_at)}–${hhmm(b.ends_at)} · ${b.participant_count||1} participante(s) · ${esc(b.status)}</div>`).join(''):'<div class="calendar-details">Disponible según patrón</div>'}
+          ${closed?'<div class="calendar-details"><strong>Franja cerrada</strong></div>':(exact.length?exact.map(b=>`<div class="calendar-details"><strong>${esc(b.service_name)}</strong> · ${hhmm(b.starts_at)}–${hhmm(b.ends_at)} · ${b.participant_count||1} participante(s) · ${esc(b.status)}</div>`).join(''):'<div class="calendar-details">Disponible según patrón</div>')}
           ${overlapsHere.filter(b=>!exact.includes(b)).map(b=>`<div class="calendar-details">Bloqueado por ${esc(b.service_name)} ${hhmm(b.starts_at)}–${hhmm(b.ends_at)}</div>`).join('')}
           ${conflict?'<div class="calendar-conflict">⚠ Conflicto: hay actividades solapadas</div>':''}
+          <div class="calendar-slot-actions">
+            ${isClosed(date,time,data)
+              ? `<button class="secondary" data-slot-open="1" data-date="${localDateKey(date)}" data-time="${time}" type="button">Abrir franja</button>`
+              : `<button class="ghost" data-slot-close="1" data-date="${localDateKey(date)}" data-time="${time}" type="button" ${overlapsHere.length?'disabled title="Hay una reserva que ocupa esta franja"':''}>Cerrar franja</button>`}
+          </div>
         </div></div></div>`);
     }
     const unslotted=dayBookings.filter(b=>!rules.some(r=>Math.abs(localDateTime(date,r.start_time.slice(0,5))-new Date(b.starts_at))<60000));
     for(const b of unslotted){pieces.push(`<div class="calendar-slot calendar-booked"><div class="calendar-entry"><div class="calendar-slot-time">${hhmm(b.starts_at)}</div><div><strong>${esc(b.service_name)}</strong><div class="calendar-details">${hhmm(b.starts_at)}–${hhmm(b.ends_at)} · ${b.participant_count||1} participante(s) · ${esc(b.status)}</div></div></div></div>`)}
     return `<section class="calendar-day"><div class="calendar-day-head"><h3>${DAY_NAMES[isoDay(date)]} ${date.toLocaleDateString('es-ES',{day:'numeric',month:'short'})}</h3><span>${dayBookings.length} reserva(s)</span></div>${pieces.length?pieces.join(''):'<div class="calendar-slot calendar-free">Día cerrado o sin reglas.</div>'}</section>`;
+  }
+
+  async function setSlotException(date,time,type){
+    if(!isAdminUser()) return toast('No tienes permisos de administración.');
+    const label=type==='closed'?'cerrar':'abrir';
+    if(!confirm(`¿Quieres ${label} la franja del ${new Date(date+'T12:00:00').toLocaleDateString('es-ES')} a las ${time}?`)) return;
+    const {error}=await db.from('calendar_exceptions').insert({exception_date:date,start_time:time,exception_type:type,reason:type==='closed'?'Cerrada desde calendario':'Reabierta desde calendario',created_by:state.user.id});
+    if(error){console.error(error);return toast('No se pudo actualizar la franja.');}
+    toast(type==='closed'?'Franja cerrada.':'Franja abierta.');
+    await openCalendar(calendarMode);
+  }
+
+  function bindSlotActions(){
+    content.querySelectorAll('[data-slot-close]').forEach(b=>b.onclick=()=>setSlotException(b.dataset.date,b.dataset.time,'closed'));
+    content.querySelectorAll('[data-slot-open]').forEach(b=>b.onclick=()=>setSlotException(b.dataset.date,b.dataset.time,'open'));
   }
 
   async function openCalendar(mode=calendarMode){
@@ -123,8 +147,10 @@
       document.querySelector('#calendarPrev').onclick=()=>{anchorDate=addDays(anchorDate,mode==='today'?-1:-7);openCalendar(mode)};
       document.querySelector('#calendarNext').onclick=()=>{anchorDate=addDays(anchorDate,mode==='today'?1:7);openCalendar(mode)};
       document.querySelector('#calendarCurrent').onclick=()=>{anchorDate=startOfDay(new Date());openCalendar(mode)};
+      bindSlotActions();
     }catch(e){console.error(e);content.innerHTML='<button id="calendarBack" class="ghost" type="button">← Volver</button><div class="card error">No se pudo cargar el calendario. Verifica que ejecutaste motor_calendario_v1.sql.</div>';document.querySelector('#calendarBack').onclick=()=>setView('admin')}
   }
 
   const timer=setInterval(()=>{if(state.profile){installCalendarButton();clearInterval(timer)}},250);
 })();
+
