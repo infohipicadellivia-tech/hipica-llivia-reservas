@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#214d3d" />
+  <title>Hípica de Llívia · Reservas</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <main id="app">
+    <section id="loginView" class="auth-shell">
+      <div class="auth-card">
+        <p class="eyebrow">HÍPICA DE LLÍVIA</p>
+        <h1>Tu espacio de reservas</h1>
+        <p class="muted">Accede para consultar tus bonos y solicitar clases.</p>
+        <form id="loginForm">
+          <label>Email<input id="email" type="email" autocomplete="email" required /></label>
+          <label>Contraseña<input id="password" type="password" autocomplete="current-password" required minlength="6" /></label>
+          <button class="primary" type="submit">Entrar</button>
+          <p id="loginError" class="error"></p>
+        </form>
+      </div>
+    </section>
+
+    <section id="privateView" class="hidden app-shell">
+      <header class="topbar">
+        <div><p class="eyebrow">HÍPICA DE LLÍVIA</p><h1 id="pageTitle">Inicio</h1></div>
+        <button id="logoutBtn" class="ghost" type="button">Salir</button>
+      </header>
+      <div id="content" class="content"></div>
+      <nav class="bottom-nav" aria-label="Navegación principal">
+        <button data-view="home" class="active" type="button">⌂<span>Inicio</span></button>
+        <button data-view="reserve" type="button">＋<span>Reservar</span></button>
+        <button data-view="bookings" type="button">▣<span>Reservas</span></button>
+        <button data-view="passes" type="button">◉<span>Bonos</span></button>
+      </nav>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
