@@ -35,32 +35,41 @@
   }
 
   async function loadAdminBookings() {
-    const result = await db
-      .from('bookings')
-      .select('*, customer:profiles!bookings_customer_id_fkey(full_name,phone), time_slots(starts_at,ends_at,services(name,duration_minutes))')
-      .in('status', ['pending','confirmed'])
-      .order('requested_at', { ascending: true });
+  // Cargamos reservas + time slot. El nombre operativo vive ahora en customers (client_id),
+  // mientras que las reservas antiguas pueden seguir dependiendo de profiles (customer_id).
+  const result = await db
+    .from('bookings')
+    .select('*, time_slots(starts_at,ends_at,services(name,duration_minutes))')
+    .in('status', ['pending','confirmed'])
+    .order('requested_at', { ascending: true });
 
-    if (!result.error) {
-      adminBookings = result.data || [];
-      return;
-    }
+  if (result.error) throw result.error;
 
-    console.error(result.error);
-    const fallback = await db
-      .from('bookings')
-      .select('*,time_slots(starts_at,ends_at,services(name,duration_minutes))')
-      .in('status', ['pending','confirmed'])
-      .order('requested_at', { ascending: true });
-    if (fallback.error) throw fallback.error;
+  const bookings = result.data || [];
+  const clientIds = [...new Set(bookings.map(b => b.client_id).filter(Boolean))];
+  const profileIds = [...new Set(bookings.map(b => b.customer_id).filter(Boolean))];
 
-    const ids = [...new Set((fallback.data || []).map(x => x.customer_id))];
-    const profiles = ids.length
-      ? await db.from('profiles').select('id,full_name,phone').in('id', ids)
-      : { data: [] };
-    const byId = Object.fromEntries((profiles.data || []).map(p => [p.id, p]));
-    adminBookings = (fallback.data || []).map(b => ({ ...b, customer: byId[b.customer_id] || null }));
-  }
+  const [clientsRes, profilesRes] = await Promise.all([
+    clientIds.length
+      ? db.from('customers').select('id,full_name,phone').in('id', clientIds)
+      : Promise.resolve({ data: [], error: null }),
+    profileIds.length
+      ? db.from('profiles').select('id,full_name,phone').in('id', profileIds)
+      : Promise.resolve({ data: [], error: null })
+  ]);
+
+  if (clientsRes.error) console.error(clientsRes.error);
+  if (profilesRes.error) console.error(profilesRes.error);
+
+  const clientsById = Object.fromEntries((clientsRes.data || []).map(c => [c.id, c]));
+  const profilesById = Object.fromEntries((profilesRes.data || []).map(p => [p.id, p]));
+
+  adminBookings = bookings.map(b => ({
+    ...b,
+    customer: clientsById[b.client_id] || profilesById[b.customer_id] || null
+  }));
+}
+
 
   function adminCard(b) {
     const slot = b.time_slots || {};
