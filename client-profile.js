@@ -21,7 +21,7 @@
     content.innerHTML='<div class="card muted">Cargando perfil…</div>';
     try{await loadClient()}catch(e){console.error(e);content.innerHTML='<div class="card error">No se pudo cargar tu ficha de cliente.</div>';return}
     content.innerHTML=`<h2>Mi perfil</h2>
-      <section class="card"><h3>Datos de contacto</h3><p><strong>${esc(client.full_name)}</strong></p><p>Teléfono: ${esc(client.phone||'No informado')}</p><p>Email: ${esc(client.email||'No informado')}</p></section>
+      <section class="card"><h3>Datos de contacto</h3><label>Nombre y apellidos *<input id="cpName" value="${esc(client.full_name||'')}"></label><label>Teléfono *<input id="cpContactPhone" type="tel" value="${esc(client.phone||'')}"></label><label>Email<input id="cpContactEmail" type="email" value="${esc(client.email||'')}"></label><button id="cpSaveData" class="secondary" type="button">Guardar datos</button></section>
       <div class="notice">Estas preferencias se utilizan únicamente para comunicaciones relacionadas con tus reservas y bonos.</div>
       <section class="card"><h3>Cómo quiero recibir avisos</h3>
         <label><input id="cpWhatsapp" type="checkbox" style="width:auto" ${client.booking_whatsapp_enabled?'checked':''}> WhatsApp</label>
@@ -31,7 +31,19 @@
         <button id="cpSave" class="primary" type="button">Guardar preferencias</button>
       </section>`;
     $('#cpPreferred').value=client.preferred_contact_channel||'whatsapp';
-    $('#cpSave').onclick=save;
+    $('#cpSave').onclick=save;$('#cpSaveData').onclick=saveContactData;
+  }
+
+  async function saveContactData(){
+    const name=$('#cpName').value.trim(),phone=$('#cpContactPhone').value.trim(),email=$('#cpContactEmail').value.trim()||null;
+    if(!name)return toast('Indica tu nombre.');
+    if(phone.replace(/\D/g,'').length<9)return toast('Indica un teléfono válido.');
+    const btn=$('#cpSaveData');btn.disabled=true;btn.textContent='Guardando…';
+    const {error}=await db.rpc('customer_update_profile',{p_full_name:name,p_phone:phone,p_email:email});
+    btn.disabled=false;btn.textContent='Guardar datos';
+    if(error){console.error(error);return toast((error.message||'').includes('INVALID_EMAIL')?'El email no es válido.':'No se pudieron guardar los datos.');}
+    if(state.profile){state.profile.full_name=name;state.profile.phone=phone;}
+    toast('Datos de contacto actualizados.');await renderProfile();
   }
 
   async function save(){
