@@ -53,10 +53,15 @@
     content.innerHTML = state.bookings.length
       ? state.bookings.map(enhancedBookingCard).join('')
       : '<div class="card muted">Todavía no tienes reservas.</div>';
-    content.querySelectorAll('[data-client-action]').forEach(button => {
-      button.onclick = () => runClientBookingAction(button.dataset.clientAction, button.dataset.id);
-    });
   };
+
+  // Delegación global: hace funcionar Modificar/Cancelar tanto en Inicio como en Mis reservas.
+  content.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-client-action]');
+    if (!button || !content.contains(button)) return;
+    event.preventDefault();
+    runClientBookingAction(button.dataset.clientAction, button.dataset.id);
+  });
 
   async function runClientBookingAction(action, id) {
     const booking = state.bookings.find(b => b.id === id);
