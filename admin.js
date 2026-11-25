@@ -73,6 +73,8 @@
          </div>`
       : `<div class="admin-actions">
            <button class="primary" data-action="complete" data-id="${b.id}" type="button">Realizada</button>
+           ${new Date(slot.starts_at).getTime()-Date.now()>6*3600000 ? `<button class="secondary" data-action="modify" data-id="${b.id}" type="button">Modificar</button>` : `<button class="secondary" type="button" disabled title="No se puede modificar cuando faltan 6 horas o menos">Modificar · fuera de plazo</button>`}
+           <button class="secondary" data-action="cancel" data-id="${b.id}" type="button">Cancelar</button>
            <button class="danger" data-action="no-show" data-id="${b.id}" type="button">No presentado</button>
          </div>`;
 
@@ -120,6 +122,28 @@
     }
   }
 
+  async function startReschedule(id) {
+    const b=adminBookings.find(x=>x.id===id);
+    if(!b?.time_slots?.starts_at) return toast('No se ha podido recuperar el horario actual.');
+    if(new Date(b.time_slots.starts_at).getTime()-Date.now() <= 6*3600000) return toast('No se puede modificar cuando faltan 6 horas o menos.');
+    const currentSlotId=b.time_slot_id;
+    const currentService=b.time_slots.services?.name;
+    const slotRec=await db.from('time_slots').select('service_id').eq('id',currentSlotId).single();
+    if(slotRec.error) return toast('No se pudo identificar la actividad.');
+    const av=await db.from('slot_availability').select('*').eq('service_id',slotRec.data.service_id).eq('status','open').gt('starts_at',new Date().toISOString()).gt('available_places',0).neq('time_slot_id',currentSlotId).order('starts_at');
+    if(av.error||!av.data?.length) return toast('No hay otros horarios disponibles para esta actividad.');
+    const choices=av.data.slice(0,12).map((x,i)=>`${i+1}. ${formatDate(x.starts_at)} · ${formatHour(x.starts_at)} · ${x.available_places} plaza(s)`).join('\n');
+    const pick=prompt(`Nuevo horario para ${currentService||'la actividad'}:\n\n${choices}\n\nEscribe el número de la opción:`);
+    const n=Number(pick);
+    if(!Number.isInteger(n)||n<1||n>Math.min(av.data.length,12)) return;
+    const target=av.data[n-1];
+    if(!confirm(`Cambiar a ${formatDate(target.starts_at)} · ${formatHour(target.starts_at)}?`)) return;
+    const {error}=await db.rpc('reschedule_booking',{p_booking_id:id,p_new_time_slot_id:target.time_slot_id,p_admin_notes:'Modificada desde panel de administración'});
+    if(error){console.error(error);return toast((error.message||'').includes('RESCHEDULE_CUTOFF_REACHED')?'Ya no se puede modificar: faltan 6 horas o menos.':'No se pudo modificar la reserva.');}
+    toast('Reserva modificada correctamente.');
+    await loadBase(); await renderAdmin('confirmed');
+  }
+
   async function runAdminAction(action, id) {
     let rpc, args, success;
     if (action === 'confirm') {
@@ -129,6 +153,12 @@
       const reason = prompt('Motivo del rechazo:');
       if (!reason || !reason.trim()) return;
       rpc = 'reject_booking'; args = { p_booking_id: id, p_reason: reason.trim(), p_admin_notes: null }; success = 'Reserva rechazada.';
+    } else if (action === 'cancel') {
+      { const b=adminBookings.find(x=>x.id===id); const late=b?.time_slots?.starts_at && (new Date(b.time_slots.starts_at).getTime()-Date.now()<=6*3600000); const msg=late?'Faltan 6 horas o menos. Si cancelas, se descontará 1 sesión del bono. ¿Continuar?':'¿Cancelar esta reserva? No se descontará ninguna sesión.'; if(!confirm(msg)) return; }
+      rpc = 'cancel_booking'; args = { p_booking_id: id, p_reason: 'Cancelada desde panel de administración' }; success = 'Reserva cancelada.';
+    } else if (action === 'modify') {
+      await startReschedule(id);
+      return;
     } else if (action === 'complete') {
       if (!confirm('¿Marcar como realizada? Se descontará el bono.')) return;
       rpc = 'complete_booking'; args = { p_booking_id: id }; success = 'Actividad realizada y bono actualizado.';
