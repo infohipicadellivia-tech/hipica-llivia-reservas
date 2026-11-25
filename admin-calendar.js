@@ -28,7 +28,7 @@
     .calendar-slot-actions button{padding:7px 10px;font-size:12px}
     .calendar-details{margin-top:5px;color:var(--muted);font-size:13px}
     .calendar-back{margin-bottom:8px}
-    .two-months{display:grid;grid-template-columns:1fr 1fr;gap:16px}.month-card{border:1px solid var(--line);border-radius:15px;padding:12px;background:#fff}.month-card h3{text-align:center;margin:4px 0 12px}.month-weekdays,.month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.month-weekdays div{text-align:center;font-size:11px;font-weight:800;color:var(--muted);padding:4px}.month-cell{min-height:76px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:5px;text-align:left;cursor:pointer;overflow:hidden}.month-cell.empty{border-color:transparent;background:transparent;cursor:default}.month-cell.closed{background:#fde8e8}.month-cell.has-booking{background:#f3f8f5}.month-num{font-weight:850}.month-event{font-size:10px;line-height:1.25;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.month-event.pending{color:#866609}.month-event.confirmed{color:#176b3a}.month-more{font-size:10px;color:var(--muted);margin-top:3px}.jump-date{display:flex;gap:8px;align-items:end;flex-wrap:wrap}.jump-date label{margin:0}.jump-date input{margin-top:4px}.jump-date button{margin-bottom:0}.calendar-limit{font-size:12px;color:var(--muted)}@media(max-width:700px){.two-months{grid-template-columns:1fr}}
+    .two-months{display:grid;grid-template-columns:1fr 1fr;gap:16px}.month-card{border:1px solid var(--line);border-radius:15px;padding:12px;background:#fff}.month-card h3{text-align:center;margin:4px 0 12px}.month-weekdays,.month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.month-weekdays div{text-align:center;font-size:11px;font-weight:800;color:var(--muted);padding:4px}.month-cell{min-height:76px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:5px;text-align:left;cursor:pointer;overflow:hidden}.month-cell.empty{border-color:transparent;background:transparent;cursor:default}.month-cell.closed{background:#fde8e8}.month-cell.has-booking{background:#f3f8f5}.month-num{font-weight:850}.month-event{font-size:10px;line-height:1.25;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.month-event.pending{color:#866609}.month-event.confirmed{color:#176b3a}.month-more{font-size:10px;color:var(--muted);margin-top:3px}.jump-date{display:flex;gap:8px;align-items:end;flex-wrap:wrap}.jump-date label{margin:0}.jump-date input{margin-top:4px}.jump-date button{margin-bottom:0}.calendar-limit{font-size:12px;color:var(--muted)}.period-card.inactive{opacity:.62}.period-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.period-form{border:1px solid var(--line);border-radius:15px;padding:14px;margin:12px 0;background:#fff}@media(max-width:700px){.two-months{grid-template-columns:1fr}}
     @media(max-width:520px){.calendar-entry{grid-template-columns:72px 1fr}.calendar-slot-time{min-width:72px}.calendar-toolbar>button{width:100%}}
   `;
   document.head.appendChild(css);
@@ -227,6 +227,35 @@
     }
     return `<section class="month-card"><h3>${first.toLocaleDateString('es-ES',{month:'long',year:'numeric'})}</h3><div class="month-weekdays"><div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div></div><div class="month-grid">${cells.join('')}</div></section>`;
   }
+  async function openSpecialPeriods(){
+    content.innerHTML='<div class="card muted">Cargando periodos especiales…</div>';
+    const r=await db.from('special_periods').select('*').order('starts_on',{ascending:true});
+    if(r.error){console.error(r.error);return toast('No se pudieron cargar los periodos especiales.');}
+    const rows=r.data||[];
+    content.innerHTML=`<button id="periodBack" class="ghost" type="button">← Volver al calendario</button><h2>Periodos especiales</h2>
+      <div class="notice">Durante un periodo con “Abrir todos los días”, martes y miércoles adoptan la misma parrilla horaria base que el jueves. Puedes cerrar días o franjas concretas después desde el calendario.</div>
+      <div class="period-form"><h3>Nuevo periodo</h3><label>Nombre<input id="periodName" placeholder="Navidad, Semana Santa, Agosto…"></label><div class="grid"><label>Desde<input id="periodFrom" type="date"></label><label>Hasta<input id="periodTo" type="date"></label></div><label><input id="periodAllDays" type="checkbox" checked style="width:auto"> Abrir todos los días</label><label>Notas<textarea id="periodNotes" rows="2"></textarea></label><button id="periodCreate" class="primary" type="button">Crear periodo</button></div>
+      <h3>Periodos configurados</h3>${rows.map(x=>`<article class="card period-card ${x.active?'':'inactive'}"><div class="row"><div><h3>${esc(x.name)}</h3><div class="muted">${new Date(x.starts_on+'T12:00:00').toLocaleDateString('es-ES')} → ${new Date(x.ends_on+'T12:00:00').toLocaleDateString('es-ES')} · ${x.open_all_days?'Todos los días':'Sin apertura total'}</div></div><span class="status ${x.active?'confirmed':'completed'}">${x.active?'Activo':'Inactivo'}</span></div>${x.notes?`<p>${esc(x.notes)}</p>`:''}<div class="period-actions"><button class="secondary" data-period-toggle="${x.id}" data-active="${x.active?'false':'true'}" type="button">${x.active?'Desactivar':'Activar'}</button><button class="ghost" data-period-edit="${x.id}" type="button">Editar</button><button class="danger" data-period-delete="${x.id}" type="button">Eliminar</button></div></article>`).join('')||'<div class="card muted">No hay periodos configurados.</div>'}`;
+    document.querySelector('#pageTitle').textContent='Periodos especiales';
+    document.querySelector('#periodBack').onclick=()=>openCalendar('months');
+    document.querySelector('#periodCreate').onclick=()=>savePeriod(null);
+    content.querySelectorAll('[data-period-toggle]').forEach(b=>b.onclick=()=>togglePeriod(b.dataset.periodToggle,b.dataset.active==='true'));
+    content.querySelectorAll('[data-period-edit]').forEach(b=>b.onclick=()=>editPeriod(rows.find(x=>x.id===b.dataset.periodEdit)));
+    content.querySelectorAll('[data-period-delete]').forEach(b=>b.onclick=()=>deletePeriod(b.dataset.periodDelete));
+  }
+  async function savePeriod(id){
+    const name=document.querySelector('#periodName').value.trim(),from=document.querySelector('#periodFrom').value,to=document.querySelector('#periodTo').value,all=document.querySelector('#periodAllDays').checked,notes=document.querySelector('#periodNotes').value.trim()||null;
+    if(!name||!from||!to)return toast('Completa nombre y fechas.');if(to<from)return toast('La fecha final no puede ser anterior a la inicial.');
+    const {error}=await db.rpc('admin_save_special_period',{p_id:id,p_name:name,p_starts_on:from,p_ends_on:to,p_open_all_days:all,p_notes:notes});
+    if(error){console.error(error);return toast('No se pudo guardar el periodo.');}toast(id?'Periodo actualizado.':'Periodo creado.');openSpecialPeriods();
+  }
+  function editPeriod(x){
+    content.querySelector('#periodName').value=x.name;content.querySelector('#periodFrom').value=x.starts_on;content.querySelector('#periodTo').value=x.ends_on;content.querySelector('#periodAllDays').checked=x.open_all_days;content.querySelector('#periodNotes').value=x.notes||'';
+    const btn=content.querySelector('#periodCreate');btn.textContent='Guardar cambios';btn.onclick=()=>savePeriod(x.id);content.querySelector('.period-form').scrollIntoView({behavior:'smooth'});
+  }
+  async function togglePeriod(id,active){const {error}=await db.rpc('admin_toggle_special_period',{p_id:id,p_active:active});if(error){console.error(error);return toast('No se pudo cambiar el estado.');}toast(active?'Periodo activado.':'Periodo desactivado.');openSpecialPeriods()}
+  async function deletePeriod(id){if(!confirm('¿Eliminar definitivamente este periodo especial?'))return;const {error}=await db.rpc('admin_delete_special_period',{p_id:id});if(error){console.error(error);return toast('No se pudo eliminar el periodo.');}toast('Periodo eliminado.');openSpecialPeriods()}
+
   async function openTwoMonths(){
     calendarMode='months';
     const today=startOfDay(new Date()), first=monthStart(today), second=addMonths(first,1), to=addMonths(first,2);
@@ -234,13 +263,14 @@
     try{
       const data=await loadCalendarData(first,to);
       content.innerHTML=`<button id="calendarBack" class="ghost calendar-back" type="button">← Volver a solicitudes</button>
-        <div class="calendar-toolbar"><div class="calendar-toolbar-group"><button class="ghost" data-calendar-mode="today" type="button">Hoy</button><button class="ghost" data-calendar-mode="week" type="button">Semana</button><button class="secondary" type="button">2 meses</button></div>
+        <div class="calendar-toolbar"><div class="calendar-toolbar-group"><button class="ghost" data-calendar-mode="today" type="button">Hoy</button><button class="ghost" data-calendar-mode="week" type="button">Semana</button><button class="secondary" type="button">2 meses</button><button id="specialPeriodsBtn" class="ghost" type="button">Periodos especiales</button></div>
         <div class="jump-date"><label>Ir a fecha<input id="jumpDate" type="date" min="${localDateKey(today)}" max="${localDateKey(new Date(today.getFullYear(),today.getMonth()+3,0))}"></label><button id="jumpBtn" class="ghost" type="button">Ir</button></div></div>
         <div class="notice">Vista de planificación: pulsa cualquier día para abrir su detalle. Se muestran el mes actual y el siguiente.</div>
         <div class="two-months">${renderMonth(first,data)}${renderMonth(second,data)}</div>`;
       document.querySelector('#pageTitle').textContent='Calendario · 2 meses';
       document.querySelector('#calendarBack').onclick=()=>setView('admin');
       content.querySelectorAll('[data-calendar-mode]').forEach(x=>x.onclick=()=>openCalendar(x.dataset.calendarMode));
+      document.querySelector('#specialPeriodsBtn').onclick=openSpecialPeriods;
       content.querySelectorAll('[data-month-day]').forEach(x=>x.onclick=()=>{anchorDate=startOfDay(new Date(x.dataset.monthDay+'T12:00:00'));openCalendar('today')});
       document.querySelector('#jumpBtn').onclick=()=>{const v=document.querySelector('#jumpDate').value;if(!v)return toast('Selecciona una fecha.');const d=startOfDay(new Date(v+'T12:00:00'));if(!withinTwoMonthWindow(d))return toast('Selecciona una fecha dentro de los próximos 2 meses.');anchorDate=d;openCalendar('today')};
     }catch(e){console.error(e);content.innerHTML='<button id="calendarBack" class="ghost">← Volver</button><div class="card error">No se pudo cargar la vista de 2 meses.</div>';document.querySelector('#calendarBack').onclick=()=>setView('admin')}
