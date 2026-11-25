@@ -119,8 +119,13 @@
     if(!isAdminUser()) return toast('No tienes permisos de administración.');
     const label=type==='closed'?'cerrar':'abrir';
     if(!confirm(`¿Quieres ${label} la franja del ${new Date(date+'T12:00:00').toLocaleDateString('es-ES')} a las ${time}?`)) return;
-    const {error}=await db.from('calendar_exceptions').insert({exception_date:date,start_time:time,exception_type:type,reason:type==='closed'?'Cerrada desde calendario':'Reabierta desde calendario',created_by:state.user.id});
-    if(error){console.error(error);return toast('No se pudo actualizar la franja.');}
+    const {error}=await db.rpc('set_calendar_exception',{
+      p_exception_date:date,
+      p_start_time:time,
+      p_exception_type:type,
+      p_reason:type==='closed'?'Cerrada desde calendario':'Reabierta desde calendario'
+    });
+    if(error){console.error(error);return toast((error.message||'').includes('FORBIDDEN')?'Tu usuario no tiene rol admin/staff.':'No se pudo actualizar la franja.');}
     toast(type==='closed'?'Franja cerrada.':'Franja abierta.');
     await openCalendar(calendarMode);
   }
@@ -153,4 +158,3 @@
 
   const timer=setInterval(()=>{if(state.profile){installCalendarButton();clearInterval(timer)}},250);
 })();
-
