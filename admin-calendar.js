@@ -111,7 +111,30 @@
       const duration=effectiveService?.duration_minutes||60;
       const end=new Date(start.getTime()+duration*60000);
       const overlapsHere=closed?[]:dayBookings.filter(b=>overlaps(start,end,b));
-      const exact=dayBookings.filter(b=>Math.abs(new Date(b.starts_at)-start)<60000);
+       new Date(booking.starts_at).getTime() -
+      start.getTime()
+    ) < 60000
+);
+
+const exactParticipants = exact.reduce(
+  (total, booking) =>
+    total + Number(booking.participant_count || 0),
+  0
+);
+
+const recommendedCapacity = 6;
+const overCapacity =
+  exactParticipants > recommendedCapacity;
+
+const activityGroups = new Set(
+  overlapsHere.map(booking => [
+    booking.service_id,
+    new Date(booking.starts_at).getTime(),
+    new Date(booking.ends_at).getTime()
+  ].join('|'))
+);
+
+const conflict = activityGroups.size > 1;
       const exactParticipants = exact.reduce(
   (total, booking) =>
     total + Number(booking.participant_count || 0),
