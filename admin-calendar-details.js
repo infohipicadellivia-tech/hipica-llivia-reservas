@@ -29,6 +29,7 @@
   let lastCalendarDate = null;
   let returnCalendarDate = null;
   let returnCalendarMode = 'today';
+  let returnCalendarTime = null;
 
   function installStyles() {
     if (document.querySelector('#calendarDetailsStyles')) return;
@@ -223,6 +224,9 @@
   async function openBookingDetail(bookingId) {
     returnCalendarDate = lastCalendarDate;
     returnCalendarMode = document.querySelector('[data-calendar-mode].secondary')?.dataset.calendarMode || 'today';
+    const sourceButton = document.querySelector(`[data-calendar-booking-detail="${bookingId}"]`);
+    const sourceSlot = sourceButton?.closest('.calendar-slot');
+    returnCalendarTime = sourceSlot?.querySelector('.calendar-slot-time')?.textContent?.trim() || null;
     content.innerHTML = '<div class="card muted">Cargando reserva…</div>';
 
     const [bookingResult, participantsResult] = await Promise.all([
@@ -325,14 +329,42 @@
     $('#bookingDetailBack').onclick = returnToCalendar;
   }
 
+  function scrollBackToSlot() {
+    if (!returnCalendarTime) return;
+
+    let attempts = 0;
+    const findAndScroll = () => {
+      attempts += 1;
+      const slot = [...content.querySelectorAll('.calendar-slot')].find(item =>
+        item.querySelector('.calendar-slot-time')?.textContent?.trim() === returnCalendarTime
+      );
+
+      if (slot) {
+        slot.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        slot.style.transition = 'box-shadow .25s ease';
+        slot.style.boxShadow = '0 0 0 3px rgba(23,107,58,.22)';
+        setTimeout(() => { slot.style.boxShadow = ''; }, 1600);
+        return;
+      }
+
+      if (attempts < 12) setTimeout(findAndScroll, 100);
+    };
+
+    setTimeout(findAndScroll, 80);
+  }
+
   function returnToCalendar() {
     if (typeof window.openAdminCalendarAtDate === 'function' && returnCalendarDate) {
-      window.openAdminCalendarAtDate(returnCalendarDate, returnCalendarMode || 'today');
+      Promise.resolve(
+        window.openAdminCalendarAtDate(returnCalendarDate, returnCalendarMode || 'today')
+      ).then(scrollBackToSlot);
       return;
     }
 
     if (typeof window.reopenAdminCalendar === 'function') {
-      window.reopenAdminCalendar(returnCalendarMode || 'today');
+      Promise.resolve(
+        window.reopenAdminCalendar(returnCalendarMode || 'today')
+      ).then(scrollBackToSlot);
       return;
     }
 
@@ -357,3 +389,4 @@
     }
   }, 250);
 })();
+
