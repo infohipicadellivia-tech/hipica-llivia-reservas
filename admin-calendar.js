@@ -112,6 +112,15 @@
       const end=new Date(start.getTime()+duration*60000);
       const overlapsHere=closed?[]:dayBookings.filter(b=>overlaps(start,end,b));
       const exact=dayBookings.filter(b=>Math.abs(new Date(b.starts_at)-start)<60000);
+      const exactParticipants = exact.reduce(
+  (total, booking) =>
+    total + Number(booking.participant_count || 0),
+  0
+);
+
+const recommendedCapacity = 6;
+const overCapacity =
+  exactParticipants > recommendedCapacity;
       const activityGroups = new Set(
   overlapsHere.map(booking => [
     booking.service_id,
@@ -126,6 +135,20 @@ const conflict = activityGroups.size > 1;
           <div class="row"><strong>${esc(effectiveService?.name||'Actividad')}</strong><span class="calendar-badge ${rule.flexible?'flex':''}">${rule.flexible?'Flexible':'Preferente'}</span></div>
           ${closed?'<div class="calendar-details"><strong>Franja cerrada</strong></div>':(exact.length?exact.map(b=>`<div class="calendar-details"><strong>${esc(b.service_name)}</strong> · ${hhmm(b.starts_at)}–${hhmm(b.ends_at)} · ${b.participant_count||1} participante(s) · ${esc(b.status)}</div>`).join(''):'<div class="calendar-details">Disponible según patrón</div>')}
           ${overlapsHere.filter(b=>!exact.includes(b)).map(b=>`<div class="calendar-details">Bloqueado por ${esc(b.service_name)} ${hhmm(b.starts_at)}–${hhmm(b.ends_at)}</div>`).join('')}
+          ${exact.length ? `
+  <div class="notice">
+    <strong>
+      Ocupación: ${exactParticipants}/${recommendedCapacity}
+    </strong>
+    ${overCapacity ? `
+      <div class="calendar-conflict">
+        ⚠ Aforo recomendado superado en
+        ${exactParticipants - recommendedCapacity}
+        persona(s)
+      </div>
+    ` : ''}
+  </div>
+` : ''}
           ${conflict?'<div class="calendar-conflict">⚠ Conflicto: hay actividades solapadas</div>':''}
           ${rule.flexible && !overlapsHere.length ? `<div class="calendar-slot-actions"><button class="secondary" data-flex-change="1" data-date="${localDateKey(date)}" data-time="${time}" data-current-service="${effectiveServiceId}" type="button">Cambiar ${esc(effectiveService?.name||'actividad')}</button>${override?`<button class="ghost" data-flex-reset="1" data-date="${localDateKey(date)}" data-time="${time}" type="button">Restaurar preferencia</button>`:''}</div>`:''}
           <div class="calendar-slot-actions">
