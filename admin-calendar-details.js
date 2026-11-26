@@ -27,6 +27,8 @@
 
   let enriching = false;
   let lastCalendarDate = null;
+  let returnCalendarDate = null;
+  let returnCalendarMode = 'today';
 
   function installStyles() {
     if (document.querySelector('#calendarDetailsStyles')) return;
@@ -172,7 +174,7 @@
                   </div>
                   <div class="calendar-booking-meta">
                     ${hhmm(booking.starts_at)}–${hhmm(booking.ends_at)}
-                    · ${Number(booking.participant_count || 1)} participante(s)
+                    · ${esc(participantSummary(booking, bookingParticipants))}
                     · ${esc(STATUS_LABELS[booking.status] || booking.status)}
                   </div>
                 </div>
@@ -207,7 +209,20 @@
     }
   }
 
+  function participantSummary(booking, participants) {
+    const total = Number(booking.participant_count || participants.length || 1);
+    const minors = (participants || []).filter(p => p.is_minor);
+    if (!minors.length) return `${total} participante${total === 1 ? '' : 's'}`;
+    const adults = Math.max(0, total - minors.length);
+    const parts = [];
+    if (adults > 0) parts.push(`${adults} adulto${adults === 1 ? '' : 's'}`);
+    minors.forEach(p => parts.push(p.age ? `${Number(p.age)} años` : 'menor'));
+    return `${total} participantes (${parts.join(', ')})`;
+  }
+
   async function openBookingDetail(bookingId) {
+    returnCalendarDate = lastCalendarDate;
+    returnCalendarMode = document.querySelector('[data-calendar-mode].secondary')?.dataset.calendarMode || 'today';
     content.innerHTML = '<div class="card muted">Cargando reserva…</div>';
 
     const [bookingResult, participantsResult] = await Promise.all([
@@ -270,7 +285,7 @@
           </div>
           <div>
             <strong>Participantes</strong>
-            <div>${Number(booking.participant_count || participants.length || 1)}</div>
+            <div>${esc(participantSummary(booking, participants))}</div>
           </div>
           <div>
             <strong>Origen</strong>
@@ -311,11 +326,24 @@
   }
 
   function returnToCalendar() {
+    if (returnCalendarDate) {
+      setView('admin');
+      setTimeout(() => {
+        const open = document.querySelector('#openAdminCalendar');
+        if (open) open.click();
+        setTimeout(() => {
+          const jump = document.querySelector('#jumpDate');
+          const jumpBtn = document.querySelector('#jumpBtn');
+          if (jump && jumpBtn) {
+            jump.value = returnCalendarDate;
+            jumpBtn.click();
+          }
+        }, 150);
+      }, 100);
+      return;
+    }
     setView('admin');
-    setTimeout(() => {
-      const button = document.querySelector('#openAdminCalendar');
-      if (button) button.click();
-    }, 100);
+    setTimeout(() => document.querySelector('#openAdminCalendar')?.click(), 100);
   }
 
   installStyles();
