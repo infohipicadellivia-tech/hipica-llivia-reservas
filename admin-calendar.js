@@ -110,12 +110,24 @@
       const start=localDateTime(date,time);
       const duration=effectiveService?.duration_minutes||60;
       const end=new Date(start.getTime()+duration*60000);
-      const overlapsHere=closed?[]:dayBookings.filter(b=>overlaps(start,end,b));
-       new Date(booking.starts_at).getTime() -
+      const overlapsHere = closed
+  ? []
+  : dayBookings.filter(
+      booking => overlaps(start, end, booking)
+    );
+
+// Reservas de esta misma actividad que empiezan
+// exactamente en esta franja
+const exact = dayBookings.filter(
+  booking =>
+    booking.service_id === effectiveServiceId &&
+    Math.abs(
+      new Date(booking.starts_at).getTime() -
       start.getTime()
     ) < 60000
 );
 
+// Ocupación real = personas, no número de reservas
 const exactParticipants = exact.reduce(
   (total, booking) =>
     total + Number(booking.participant_count || 0),
@@ -126,31 +138,18 @@ const recommendedCapacity = 6;
 const overCapacity =
   exactParticipants > recommendedCapacity;
 
+// Varias reservas de la misma actividad/hora
+// forman una sesión grupal, no un conflicto
 const activityGroups = new Set(
-  overlapsHere.map(booking => [
-    booking.service_id,
-    new Date(booking.starts_at).getTime(),
-    new Date(booking.ends_at).getTime()
-  ].join('|'))
+  overlapsHere.map(booking =>
+    [
+      booking.service_id,
+      new Date(booking.starts_at).getTime(),
+      new Date(booking.ends_at).getTime()
+    ].join('|')
+  )
 );
 
-const conflict = activityGroups.size > 1;
-      const exactParticipants = exact.reduce(
-  (total, booking) =>
-    total + Number(booking.participant_count || 0),
-  0
-);
-
-const recommendedCapacity = 6;
-const overCapacity =
-  exactParticipants > recommendedCapacity;
-      const activityGroups = new Set(
-  overlapsHere.map(booking => [
-    booking.service_id,
-    new Date(booking.starts_at).getTime(),
-    new Date(booking.ends_at).getTime()
-  ].join('|'))
-);
 
 const conflict = activityGroups.size > 1;
       pieces.push(`<div class="calendar-slot ${closed?'calendar-closed':(overlapsHere.length?'calendar-booked':'calendar-free')}">
