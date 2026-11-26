@@ -10,7 +10,7 @@
       if(!hero||document.querySelector('#openClients'))return;
       const b=document.createElement('button');
       b.id='openClients';b.type='button';b.className='secondary calendar-launch';
-      b.textContent='👥 Clientes y bonos';b.onclick=openClients;
+      b.textContent='👥 Clientes';b.onclick=openClients;
       hero.insertAdjacentElement('afterend',b);
     };
     new MutationObserver(check).observe(content,{childList:true,subtree:true});check();
@@ -26,7 +26,7 @@
   function renderList(filter=''){
     const f=filter.toLowerCase();
     const rows=clients.filter(c=>!f||c.full_name?.toLowerCase().includes(f)||c.phone?.includes(filter)||c.email?.toLowerCase().includes(f));
-    content.innerHTML=`<button id="clBack" class="ghost">← Volver</button><h2>Clientes y bonos</h2>
+    content.innerHTML=`<button id="clBack" class="ghost">← Volver</button><h2>Clientes</h2>
       <label>Buscar por nombre, teléfono o email<input id="clSearch" value="${esc(filter)}" placeholder="Ej. Maria o 600123123"></label>
       <div id="clRows">${rows.map(c=>`<button class="service-card" data-client="${c.client_id}" type="button"><div class="row"><div><h3>${esc(c.full_name)}</h3><div class="muted">${esc(c.phone||'Sin teléfono')}${c.email?' · '+esc(c.email):''}</div></div><div style="text-align:right"><strong>${Number(c.visible_credit_total||0)} créditos</strong><div class="muted">${c.active_pass_count} bono(s)</div></div></div></button>`).join('')||'<div class="card muted">No hay clientes.</div>'}</div>`;
     $('#clBack').onclick=()=>setView('admin');
