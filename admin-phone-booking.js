@@ -112,11 +112,12 @@
     'function'
   ) {
     const capacityCheck =
-      await window.checkAdminCapacityBeforeCreate(
-        service,
-        start.toISOString(),
-        count
-      );
+  await window.checkAdminCapacityBeforeCreate(
+    service,
+    start.toISOString(),
+    count,
+    participants.map(person => person.rider_level)
+  );
 
     if (!capacityCheck.allow) {
       return;
