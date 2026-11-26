@@ -46,6 +46,7 @@
       <div class="grid">
         <button id="contactPrefs" class="secondary service-card" type="button"><strong>📞 Preferencias de contacto</strong><div class="muted">Canales para reservas y bonos</div></button>
         <button id="clientFiles" class="secondary service-card" type="button"><strong>📎 Archivos</strong><div class="muted">Fotos y documentos internos</div></button>
+        <button id="clientHorses" class="secondary service-card" type="button"><strong>🐴 Caballos</strong><div class="muted">Pupilaje y ficha equina</div></button>
       </div>
       <div class="grid"><div class="card"><div class="metric">${Number(selected.visible_credit_total||0)}</div><strong>Créditos disponibles</strong></div><div class="card"><div class="metric">${selected.booking_count||0}</div><strong>Reservas</strong></div></div>
       <h2>Bonos</h2>
@@ -53,13 +54,36 @@
       ${(passes.data||[]).map(p=>`<article class="card"><div class="row"><div><h3>${esc(p.name)}</h3><div class="muted">${p.purchase_price!=null?Number(p.purchase_price)+' € · ':''}${esc(p.status)}</div></div><div class="metric">${Number(p.remaining_credits)}</div></div><div class="muted">de ${Number(p.initial_credits)} créditos${p.expires_at?' · caduca '+new Date(p.expires_at+'T12:00:00').toLocaleDateString('es-ES'):''}</div><div class="admin-actions"><button class="secondary" data-adjust="${p.id}" data-delta="1" type="button">+1 crédito</button><button class="ghost" data-adjust="${p.id}" data-delta="-1" type="button">-1 crédito</button><button class="ghost" data-moves="${p.id}" type="button">Movimientos</button></div></article>`).join('')||'<div class="card muted">Sin bonos.</div>'}
       <h2>Últimas reservas</h2>${(bookings.data||[]).map(b=>`<div class="card row"><div><strong>${esc(b.service_name)}</strong><div class="muted">${formatDate(b.starts_at)} · ${formatHour(b.starts_at)} · ${b.participant_count||1} persona(s)</div></div><span class="status ${b.status}">${esc(b.status)}</span></div>`).join('')||'<div class="card muted">Sin reservas.</div>'}`;
 
-    $('#clientBack').onclick=()=>renderList();
-    $('#contactPrefs').onclick=()=>window.openCustomerContactPreferences?window.openCustomerContactPreferences(id):toast('No se ha cargado Preferencias de contacto.');
-    $('#clientFiles').onclick=()=>window.openCustomerFiles?window.openCustomerFiles(id):toast('No se ha cargado el módulo de archivos. Revisa index.html.');
-    $('#issuePass').onclick=()=>issuePass(id);
-    content.querySelectorAll('[data-adjust]').forEach(b=>b.onclick=()=>adjustPass(b.dataset.adjust,Number(b.dataset.delta)));
-    content.querySelectorAll('[data-moves]').forEach(b=>b.onclick=()=>showMovements(b.dataset.moves));
-  }
+  $('#clientBack').onclick=()=>renderList();
+
+$('#contactPrefs').onclick=()=>
+  window.openCustomerContactPreferences
+    ? window.openCustomerContactPreferences(id)
+    : toast('No se ha cargado Preferencias de contacto.');
+
+$('#clientFiles').onclick=()=>
+  window.openCustomerFiles
+    ? window.openCustomerFiles(id)
+    : toast('No se ha cargado el módulo de archivos. Revisa index.html.');
+
+$('#clientHorses').onclick=()=>
+  window.openCustomerHorses
+    ? window.openCustomerHorses(id)
+    : toast('No se ha cargado el módulo de Caballos. Revisa index.html.');
+
+$('#issuePass').onclick=()=>issuePass(id);
+
+content.querySelectorAll('[data-adjust]').forEach(
+  b=>b.onclick=()=>adjustPass(
+    b.dataset.adjust,
+    Number(b.dataset.delta)
+  )
+);
+
+content.querySelectorAll('[data-moves]').forEach(
+  b=>b.onclick=()=>showMovements(b.dataset.moves)
+);
+    }
 
   async function issuePass(clientId){
     const code=$('#productSelect').value,expiry=$('#passExpiry').value||null;
