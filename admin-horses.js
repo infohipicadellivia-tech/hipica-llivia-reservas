@@ -33,7 +33,19 @@
     if(!name)return toast('Indica el nombre del caballo.');if(birth&&year)return toast('Indica fecha de nacimiento o año aproximado, no ambos.');
     const btn=$('#hCreate');btn.disabled=true;btn.textContent='Creando…';
     const {error}=await db.rpc('admin_create_horse',{p_client_id:horseClientId,p_name:name,p_birth_date:birth,p_approximate_birth_year:year,p_sex:$('#hSex').value,p_breed:$('#hBreed').value.trim()||null,p_coat:$('#hCoat').value.trim()||null,p_microchip_number:$('#hChip').value.trim()||null,p_passport_number:$('#hPassport').value.trim()||null,p_general_notes:$('#hNotes').value.trim()||null,p_boarding_starts_on:$('#hBoardStart').value||null,p_boarding_type:$('#hBoardType').value.trim()||null,p_monthly_price:$('#hPrice').value?Number($('#hPrice').value):null});
-    btn.disabled=false;btn.textContent='Crear caballo';if(error){console.error(error);return toast('No se pudo crear el caballo.');}toast('Caballo creado.');openHorses(horseClientId);
+    btn.disabled=false;btn.textContent='Crear caballo';if (error) {
+  console.error('ERROR CREAR CABALLO:', error);
+
+  alert(
+    'No se pudo crear el caballo.\n\n' +
+    'Código: ' + (error.code || 'sin código') + '\n' +
+    'Mensaje: ' + (error.message || 'sin mensaje') + '\n' +
+    'Detalle: ' + (error.details || 'sin detalle') + '\n' +
+    'Hint: ' + (error.hint || 'sin hint')
+  );
+
+  return;
+}toast('Caballo creado.');openHorses(horseClientId);
   }
 
   async function endBoarding(horseId){const today=new Date().toISOString().slice(0,10);const date=prompt('Fecha fin de pupilaje (AAAA-MM-DD):',today);if(!date)return;if(!confirm(`¿Finalizar el pupilaje el ${date}?`))return;const {error}=await db.rpc('admin_end_boarding',{p_horse_id:horseId,p_ends_on:date});if(error){console.error(error);return toast('No se pudo finalizar el pupilaje.');}toast('Pupilaje finalizado.');openHorses(horseClientId)}
