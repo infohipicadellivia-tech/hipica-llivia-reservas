@@ -245,116 +245,326 @@
     return `${total} participantes (${parts.join(', ')})`;
   }
 
-  async function openBookingDetail(bookingId) {
-    returnCalendarDate = lastCalendarDate;
-    returnCalendarMode = document.querySelector('[data-calendar-mode].secondary')?.dataset.calendarMode || 'today';
-    const sourceButton = document.querySelector(`[data-calendar-booking-detail="${bookingId}"]`);
-    const sourceSlot = sourceButton?.closest('.calendar-slot');
-    returnCalendarTime = sourceSlot?.querySelector('.calendar-slot-time')?.textContent?.trim() || null;
-    content.innerHTML = '<div class="card muted">Cargando reserva…</div>';
+ async function openBookingDetail(bookingId) {
+  returnCalendarDate = lastCalendarDate;
 
-    const [bookingResult, participantsResult] = await Promise.all([
-      db
-        .from('booking_schedule')
-        .select('*')
-        .eq('booking_id', bookingId)
-        .single(),
-      db
-        .from('booking_participants')
-        .select('*')
-        .eq('booking_id', bookingId)
-        .order('created_at')
-    ]);
+  returnCalendarMode =
+    document.querySelector(
+      '[data-calendar-mode].secondary'
+    )?.dataset.calendarMode || 'today';
 
-    if (bookingResult.error || participantsResult.error) {
-      console.error('Detalle booking_schedule:', bookingResult.error);
-      console.error('Detalle booking_participants:', participantsResult.error);
-      content.innerHTML = `
-        <button id="bookingDetailBackError" class="ghost" type="button">← Volver al calendario</button> <div
-  data-current-booking-id="${booking.booking_id}"
-  hidden>
-</div>
-        <div class="card error">No se pudo cargar el detalle de la reserva.</div>`;
-      $('#bookingDetailBackError').onclick = returnToCalendar;
-      return;
-    }
+  const sourceButton = document.querySelector(
+    `[data-calendar-booking-detail="${bookingId}"]`
+  );
 
-    const booking = bookingResult.data;
-    const participants = participantsResult.data || [];
+  const sourceSlot = sourceButton?.closest(
+    '.calendar-slot'
+  );
+
+  returnCalendarTime =
+    sourceSlot
+      ?.querySelector('.calendar-slot-time')
+      ?.textContent
+      ?.trim() || null;
+
+  content.innerHTML =
+    '<div class="card muted">Cargando reserva…</div>';
+
+  const [
+    bookingResult,
+    participantsResult
+  ] = await Promise.all([
+
+    db
+      .from('booking_schedule')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .single(),
+
+    db
+      .from('booking_participants')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .order('created_at')
+
+  ]);
+
+  if (
+    bookingResult.error ||
+    participantsResult.error
+  ) {
+
+    console.error(
+      'Detalle booking_schedule:',
+      bookingResult.error
+    );
+
+    console.error(
+      'Detalle booking_participants:',
+      participantsResult.error
+    );
 
     content.innerHTML = `
-      <button id="bookingDetailBack" class="ghost" type="button">← Volver al calendario</button>
-      <h2>Detalle de reserva</h2>
+      <button
+        id="bookingDetailBackError"
+        class="ghost"
+        type="button">
+        ← Volver al calendario
+      </button>
 
-      <section class="card">
-        <div class="row">
-          <div>
-            <h3>${esc(booking.service_name || 'Actividad')}</h3>
-            <div class="muted">
-              ${new Date(booking.starts_at).toLocaleDateString('es-ES', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-              })}
-              · ${hhmm(booking.starts_at)}–${hhmm(booking.ends_at)}
-            </div>
-          </div>
-          <span class="status ${booking.status}">
-            ${esc(STATUS_LABELS[booking.status] || booking.status)}
-          </span>
-        </div>
-
-        <div class="booking-detail-grid">
-          <div>
-            <strong>Cliente</strong>
-            <div>${esc(booking.client_name || 'No informado')}</div>
-          </div>
-          <div>
-            <strong>Teléfono</strong>
-            <div>${esc(booking.client_phone || booking.contact_phone || 'No informado')}</div>
-          </div>
-          <div>
-            <strong>Participantes</strong>
-            <div>${esc(participantSummary(booking, participants))}</div>
-          </div>
-          <div>
-            <strong>Origen</strong>
-            <div>${esc(booking.booking_source || 'No informado')}</div>
-          </div>
-          <div>
-            <strong>Duración</strong>
-            <div>${Number(booking.duration_minutes || 0)} min</div>
-          </div>
-        </div>
-
-        ${booking.customer_notes ? `
-          <h3>Observaciones</h3>
-          <p>${esc(booking.customer_notes)}</p>
-        ` : ''}
-      </section>
-
-      <h2>Participantes</h2>
-      ${participants.map((person, index) => `
-        <article class="card">
-          <h3>${index + 1}. ${esc(person.full_name || 'Participante')}</h3>
-          <div class="booking-detail-grid">
-            <div>
-              <strong>Nivel</strong>
-              <div>${esc(LEVEL_LABELS[person.rider_level] || person.rider_level || 'No informado')}</div>
-            </div>
-            <div>
-              <strong>Menor</strong>
-              <div>${person.is_minor ? `Sí${person.age ? ` · ${Number(person.age)} años` : ''}` : 'No'}</div>
-            </div>
-          </div>
-          ${person.notes ? `<p class="muted">${esc(person.notes)}</p>` : ''}
-        </article>
-      `).join('') || '<div class="card muted">No hay detalle individual de participantes.</div>'}
+      <div class="card error">
+        No se pudo cargar el detalle de la reserva.
+      </div>
     `;
 
-    $('#bookingDetailBack').onclick = returnToCalendar;
+    $('#bookingDetailBackError').onclick =
+      returnToCalendar;
+
+    return;
   }
+
+  const booking = bookingResult.data;
+
+  const participants =
+    participantsResult.data || [];
+
+  content.innerHTML = `
+
+    <button
+      id="bookingDetailBack"
+      class="ghost"
+      type="button">
+      ← Volver al calendario
+    </button>
+
+    <div
+      data-current-booking-id="${booking.booking_id}"
+      hidden>
+    </div>
+
+    <h2>Detalle de reserva</h2>
+
+    <section class="card">
+
+      <div class="row">
+
+        <div>
+
+          <h3>
+            ${esc(
+              booking.service_name ||
+              'Actividad'
+            )}
+          </h3>
+
+          <div class="muted">
+
+            ${
+              new Date(
+                booking.starts_at
+              ).toLocaleDateString(
+                'es-ES',
+                {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric'
+                }
+              )
+            }
+
+            ·
+            ${hhmm(booking.starts_at)}
+            –
+            ${hhmm(booking.ends_at)}
+
+          </div>
+
+        </div>
+
+        <span
+          class="status ${booking.status}">
+
+          ${esc(
+            STATUS_LABELS[
+              booking.status
+            ] || booking.status
+          )}
+
+        </span>
+
+      </div>
+
+      <div class="booking-detail-grid">
+
+        <div>
+          <strong>Cliente</strong>
+
+          <div>
+            ${esc(
+              booking.client_name ||
+              'No informado'
+            )}
+          </div>
+        </div>
+
+        <div>
+          <strong>Teléfono</strong>
+
+          <div>
+            ${esc(
+              booking.client_phone ||
+              booking.contact_phone ||
+              'No informado'
+            )}
+          </div>
+        </div>
+
+        <div>
+          <strong>Participantes</strong>
+
+          <div>
+            ${esc(
+              participantSummary(
+                booking,
+                participants
+              )
+            )}
+          </div>
+        </div>
+
+        <div>
+          <strong>Origen</strong>
+
+          <div>
+            ${esc(
+              booking.booking_source ||
+              'No informado'
+            )}
+          </div>
+        </div>
+
+        <div>
+          <strong>Duración</strong>
+
+          <div>
+            ${
+              Number(
+                booking.duration_minutes ||
+                0
+              )
+            } min
+          </div>
+        </div>
+
+      </div>
+
+      ${
+        booking.customer_notes
+          ? `
+            <h3>Observaciones</h3>
+
+            <p>
+              ${esc(
+                booking.customer_notes
+              )}
+            </p>
+          `
+          : ''
+      }
+
+    </section>
+
+    <h2>Participantes</h2>
+
+    ${
+      participants
+        .map(
+          (person, index) => `
+
+            <article class="card">
+
+              <h3>
+                ${index + 1}.
+                ${esc(
+                  person.full_name ||
+                  'Participante'
+                )}
+              </h3>
+
+              <div
+                class="booking-detail-grid">
+
+                <div>
+
+                  <strong>Nivel</strong>
+
+                  <div>
+                    ${esc(
+                      LEVEL_LABELS[
+                        person.rider_level
+                      ] ||
+                      person.rider_level ||
+                      'No informado'
+                    )}
+                  </div>
+
+                </div>
+
+                <div>
+
+                  <strong>Menor</strong>
+
+                  <div>
+                    ${
+                      person.is_minor
+                        ? `Sí${
+                            person.age
+                              ? ` · ${
+                                  Number(
+                                    person.age
+                                  )
+                                } años`
+                              : ''
+                          }`
+                        : 'No'
+                    }
+                  </div>
+
+                </div>
+
+              </div>
+
+              ${
+                person.notes
+                  ? `
+                    <p class="muted">
+                      ${esc(
+                        person.notes
+                      )}
+                    </p>
+                  `
+                  : ''
+              }
+
+            </article>
+          `
+        )
+        .join('') ||
+
+      `
+        <div class="card muted">
+          No hay detalle individual
+          de participantes.
+        </div>
+      `
+    }
+
+  `;
+
+  $('#bookingDetailBack').onclick =
+    returnToCalendar;
+}
 
   function scrollBackToSlot() {
     if (!returnCalendarTime) return;
