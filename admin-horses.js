@@ -44,12 +44,55 @@
   async function uploadPhoto(){const f=$('#horsePhotoInput').files[0];if(!f)return toast('Selecciona una foto.');if(f.size>10*1024*1024)return toast('Máximo 10 MB.');if(!['image/jpeg','image/png','image/webp'].includes(f.type))return toast('Formato no permitido.');const ext=(f.name.split('.').pop()||'jpg').toLowerCase(),path=`${currentHorseId}/${crypto.randomUUID()}.${ext}`;const u=await db.storage.from('horse-files').upload(path,f,{contentType:f.type});if(u.error)return toast('No se pudo subir la foto.');const m=await db.from('horse_documents').insert({horse_id:currentHorseId,storage_path:path,document_type:'photo',original_name:f.name,mime_type:f.type,size_bytes:f.size,visible_to_customer:true,uploaded_by:state.user.id}).select().single();if(m.error){await db.storage.from('horse-files').remove([path]);return toast('No se pudo registrar la foto.');}await db.from('horses').update({primary_photo_document_id:m.data.id}).eq('id',currentHorseId);toast('Foto actualizada.');openHorse(currentHorseId)}
   async function renderSignedPhoto(photo){const r=await db.storage.from('horse-files').createSignedUrl(photo.storage_path,300);if(!r.error&&$('#horsePhoto'))$('#horsePhoto').innerHTML=`<img src="${r.data.signedUrl}" alt="Foto del caballo" style="width:100%;max-height:320px;object-fit:cover;border-radius:12px">`}
   async function addHealth(){const date=$('#healthDate').value;if(!date)return toast('Indica la fecha del evento.');const {error}=await db.rpc('admin_add_horse_health_event',{p_horse_id:currentHorseId,p_event_type:$('#healthType').value,p_event_date:date,p_next_due_date:$('#healthNext').value||null,p_professional:$('#healthProfessional').value.trim()||null,p_description:$('#healthDescription').value.trim()||null,p_notes:$('#healthNotes').value.trim()||null,p_visible_to_customer:$('#healthVisible').checked});if(error){console.error(error);return toast('No se pudo añadir el evento.');}toast('Evento añadido.');openHorse(currentHorseId)}
-  async function deleteHealth(id){if(!confirm('¿Eliminar este evento de salud?'))return;const {error}=await db.rpc('admin_delete_horse_health_event',{p_event_id:id});if(error)return toast('No se pudo eliminar.');openHorse(currentHorseId)}
-  window.openCustomerHorses=openHorses;
-})();
+ async function deleteHealth(id){
+  if(!confirm('¿Eliminar este evento de salud?'))return;
 
+  const {error}=await db.rpc(
+    'admin_delete_horse_health_event',
+    {p_event_id:id}
+  );
 
-  async function endBoarding(horseId){const today=new Date().toISOString().slice(0,10);const date=prompt('Fecha fin de pupilaje (AAAA-MM-DD):',today);if(!date)return;if(!confirm(`¿Finalizar el pupilaje el ${date}?`))return;const {error}=await db.rpc('admin_end_boarding',{p_horse_id:horseId,p_ends_on:date});if(error){console.error(error);return toast('No se pudo finalizar el pupilaje.');}toast('Pupilaje finalizado.');openHorses(horseClientId)}
+  if(error){
+    console.error(error);
+    return toast('No se pudo eliminar.');
+  }
 
-  window.openCustomerHorses=openHorses;
+  openHorse(currentHorseId);
+}
+
+async function endBoarding(horseId){
+  const today=new Date().toISOString().slice(0,10);
+
+  const date=prompt(
+    'Fecha fin de pupilaje (AAAA-MM-DD):',
+    today
+  );
+
+  if(!date)return;
+
+  if(!confirm(
+    `¿Finalizar el pupilaje el ${date}?`
+  ))return;
+
+  const {error}=await db.rpc(
+    'admin_end_boarding',
+    {
+      p_horse_id:horseId,
+      p_ends_on:date
+    }
+  );
+
+  if(error){
+    console.error(error);
+    return toast(
+      'No se pudo finalizar el pupilaje.'
+    );
+  }
+
+  toast('Pupilaje finalizado.');
+  openHorses(horseClientId);
+}
+
+window.openCustomerHorses=openHorses;
+
 })();
