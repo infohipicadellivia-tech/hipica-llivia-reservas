@@ -141,7 +141,7 @@
     const [h, health, docs] = await Promise.all([
       db.from('horses').select('*').eq('id', horseId).single(),
       db.from('horse_health_events').select('*').eq('horse_id', horseId).order('event_date', { ascending: false }),
-      db.from('horse_documents').select('*').eq('horse_id', horseId).eq('document_type', 'photo').order('created_at', { ascending: false })
+      db.from('horse_documents').select('*').eq('horse_id', horseId).order('created_at', { ascending: false })
     ]);
 
     if (h.error || health.error || docs.error) {
@@ -150,29 +150,27 @@
     }
 
     const horse = h.data;
-    const photo = (docs.data || []).find(x => x.id === horse.primary_photo_document_id) || (docs.data || [])[0];
+    const allDocs = docs.data || [];
+    const photos = allDocs.filter(x => x.document_type === 'photo');
+    const documents = allDocs.filter(x => x.document_type !== 'photo');
+    const photo = photos.find(x => x.id === horse.primary_photo_document_id) || photos[0];
+    const docLabels = {passport:'Pasaporte',vaccine:'Vacunación',veterinary_report:'Informe veterinario',insurance:'Seguro',authorization:'Autorización',other:'Otro'};
 
     content.innerHTML = `
       <button id="horseDetailBack" class="ghost">← Caballos</button>
       <h2>🐴 ${esc(horse.name)}</h2>
 
       <section class="card">
+        <h3>📷 Foto principal</h3>
         <div id="horsePhoto">${photo ? '<div class="muted">Cargando foto…</div>' : '<div class="muted">Sin foto principal</div>'}</div>
-        <label>Foto principal<input id="horsePhotoInput" type="file" accept="image/jpeg,image/png,image/webp"></label>
+        <label>Seleccionar foto<input id="horsePhotoInput" type="file" accept="image/jpeg,image/png,image/webp"></label>
         <button id="uploadHorsePhoto" class="secondary">Subir foto</button>
       </section>
 
       <h2>🩺 Salud</h2>
       <section class="card">
-        <label>Tipo
-          <select id="healthType">
-            ${Object.entries(healthLabel).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
-          </select>
-        </label>
-        <div class="grid">
-          <label>Fecha<input id="healthDate" type="date"></label>
-          <label>Próxima fecha<input id="healthNext" type="date"></label>
-        </div>
+        <label>Tipo<select id="healthType">${Object.entries(healthLabel).map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
+        <div class="grid"><label>Fecha<input id="healthDate" type="date"></label><label>Próxima fecha<input id="healthNext" type="date"></label></div>
         <label>Profesional<input id="healthProfessional"></label>
         <label>Descripción<input id="healthDescription"></label>
         <label>Notas<textarea id="healthNotes" rows="2"></textarea></label>
@@ -180,43 +178,76 @@
         <button id="addHealth" class="primary">Añadir evento</button>
       </section>
 
-      ${(health.data || []).map(e => `
-        <article class="card">
-          <div class="row">
-            <div>
-              <strong>${healthLabel[e.event_type] || e.event_type}</strong>
-              <div class="muted">
-                ${new Date(e.event_date + 'T12:00:00').toLocaleDateString('es-ES')}
-                ${e.next_due_date ? ' · Próxima ' + new Date(e.next_due_date + 'T12:00:00').toLocaleDateString('es-ES') : ''}
-              </div>
-            </div>
-            <span>${e.visible_to_customer ? '👤' : '🔒'}</span>
-          </div>
-          ${e.description ? `<p>${esc(e.description)}</p>` : ''}
-          ${e.notes ? `<p class="muted">${esc(e.notes)}</p>` : ''}
-          <button class="danger" data-delete-health="${e.id}">Eliminar</button>
-        </article>
-      `).join('') || '<div class="card muted">Sin eventos de salud.</div>'}
+      ${(health.data || []).map(e => `<article class="card"><div class="row"><div><strong>${healthLabel[e.event_type] || e.event_type}</strong><div class="muted">${new Date(e.event_date+'T12:00:00').toLocaleDateString('es-ES')}${e.next_due_date?' · Próxima '+new Date(e.next_due_date+'T12:00:00').toLocaleDateString('es-ES'):''}</div></div><span>${e.visible_to_customer?'👤':'🔒'}</span></div>${e.description?`<p>${esc(e.description)}</p>`:''}${e.notes?`<p class="muted">${esc(e.notes)}</p>`:''}<button class="danger" data-delete-health="${e.id}">Eliminar</button></article>`).join('') || '<div class="card muted">Sin eventos de salud.</div>'}
 
-      <h2>📎 Documentos y cuidados</h2>
-      <button id="horseDocuments" class="secondary calendar-launch" type="button">
-        Abrir documentos y cuidados
-      </button>
+      <h2>🌾 Cuidados y alimentación</h2>
+      <section class="card">
+        <label>Observaciones<textarea id="horseCareNotes" rows="5" placeholder="Pienso, heno, suplementos, medicación habitual, ejercicio, restricciones…">${esc(horse.care_and_feeding_notes || '')}</textarea></label>
+        <button id="saveHorseCare" class="secondary" type="button">Guardar observaciones</button>
+      </section>
+
+      <h2>📎 Documentos</h2>
+      <section class="card">
+        <label>Tipo<select id="horseDocType">${Object.entries(docLabels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label>
+        <label>Archivo<input id="horseDocFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf"></label>
+        <label>Nota opcional<input id="horseDocNote"></label>
+        <label><input id="horseDocVisible" type="checkbox" style="width:auto"> Visible para propietario</label>
+        <button id="uploadHorseDoc" class="primary" type="button">Subir documento</button>
+      </section>
+
+      ${documents.map(x=>`<article class="card"><div class="row"><div><strong>${esc(x.original_name)}</strong><div class="muted">${docLabels[x.document_type]||x.document_type} · ${(Number(x.size_bytes)/1024/1024).toFixed(2)} MB · ${new Date(x.created_at).toLocaleDateString('es-ES')}</div></div><span>${x.visible_to_customer?'👤':'🔒'}</span></div>${x.notes?`<p>${esc(x.notes)}</p>`:''}<div class="admin-actions"><button class="secondary" data-hdoc-view="${x.id}">Ver</button><button class="danger" data-hdoc-delete="${x.id}">Eliminar</button></div></article>`).join('') || '<div class="card muted">Sin documentos.</div>'}
     `;
 
     $('#horseDetailBack').onclick = () => openHorses(horseClientId);
     $('#uploadHorsePhoto').onclick = uploadPhoto;
     $('#addHealth').onclick = addHealth;
-    $('#horseDocuments').onclick = () =>
-      window.openHorseDocuments
-        ? window.openHorseDocuments(currentHorseId)
-        : toast('No se ha cargado el módulo de documentos.');
-
-    content.querySelectorAll('[data-delete-health]').forEach(
-      b => b.onclick = () => deleteHealth(b.dataset.deleteHealth)
-    );
-
+    $('#saveHorseCare').onclick = saveCareNotes;
+    $('#uploadHorseDoc').onclick = uploadHorseDocument;
+    content.querySelectorAll('[data-delete-health]').forEach(b => b.onclick = () => deleteHealth(b.dataset.deleteHealth));
+    content.querySelectorAll('[data-hdoc-view]').forEach(b => b.onclick = () => viewHorseDocument(b.dataset.hdocView, documents));
+    content.querySelectorAll('[data-hdoc-delete]').forEach(b => b.onclick = () => deleteHorseDocument(b.dataset.hdocDelete, documents));
     if (photo) renderSignedPhoto(photo);
+  }
+
+  async function saveCareNotes() {
+    const { error } = await db.rpc('admin_update_horse_care_notes', {
+      p_horse_id: currentHorseId,
+      p_notes: $('#horseCareNotes').value.trim() || null
+    });
+    if (error) { console.error(error); return toast('No se pudieron guardar las observaciones.'); }
+    toast('Observaciones guardadas.');
+  }
+
+  async function uploadHorseDocument() {
+    const f = $('#horseDocFile').files[0];
+    if (!f) return toast('Selecciona un archivo.');
+    if (f.size > 10 * 1024 * 1024) return toast('Máximo 10 MB.');
+    if (!['image/jpeg','image/png','image/webp','application/pdf'].includes(f.type)) return toast('Formato no permitido.');
+    const ext = (f.name.split('.').pop() || 'file').toLowerCase();
+    const path = `${currentHorseId}/${crypto.randomUUID()}.${ext}`;
+    const u = await db.storage.from('horse-files').upload(path, f, {contentType:f.type});
+    if (u.error) { console.error(u.error); return toast('No se pudo subir el documento.'); }
+    const m = await db.from('horse_documents').insert({horse_id:currentHorseId,storage_path:path,document_type:$('#horseDocType').value,original_name:f.name,mime_type:f.type,size_bytes:f.size,notes:$('#horseDocNote').value.trim()||null,visible_to_customer:$('#horseDocVisible').checked,uploaded_by:state.user.id});
+    if (m.error) { await db.storage.from('horse-files').remove([path]); console.error(m.error); return toast('No se pudo registrar el documento.'); }
+    toast('Documento subido.');
+    openHorse(currentHorseId);
+  }
+
+  async function viewHorseDocument(id, documents) {
+    const x = documents.find(r => r.id === id); if (!x) return;
+    const r = await db.storage.from('horse-files').createSignedUrl(x.storage_path,300);
+    if (r.error) return toast('No se pudo abrir el documento.');
+    window.open(r.data.signedUrl,'_blank','noopener');
+  }
+
+  async function deleteHorseDocument(id, documents) {
+    const x = documents.find(r => r.id === id); if (!x || !confirm(`¿Eliminar ${x.original_name}?`)) return;
+    const r = await db.storage.from('horse-files').remove([x.storage_path]);
+    if (r.error) return toast('No se pudo eliminar el archivo.');
+    const d = await db.from('horse_documents').delete().eq('id',id);
+    if (d.error) return toast('No se pudo eliminar el registro.');
+    toast('Documento eliminado.');
+    openHorse(currentHorseId);
   }
 
   async function uploadPhoto() {
@@ -318,4 +349,3 @@
   window.reopenHorseDetail = openHorse;
   window.openCustomerHorses = openHorses;
 })();
-
