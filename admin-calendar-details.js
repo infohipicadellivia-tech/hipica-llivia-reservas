@@ -270,7 +270,10 @@
       console.error('Detalle booking_schedule:', bookingResult.error);
       console.error('Detalle booking_participants:', participantsResult.error);
       content.innerHTML = `
-        <button id="bookingDetailBackError" class="ghost" type="button">← Volver al calendario</button>
+        <button id="bookingDetailBackError" class="ghost" type="button">← Volver al calendario</button> <div
+  data-current-booking-id="${booking.booking_id}"
+  hidden>
+</div>
         <div class="card error">No se pudo cargar el detalle de la reserva.</div>`;
       $('#bookingDetailBackError').onclick = returnToCalendar;
       return;
