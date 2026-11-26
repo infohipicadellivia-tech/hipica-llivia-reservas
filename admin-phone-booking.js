@@ -26,6 +26,159 @@
   function serviceChanged(e){const s=services.find(x=>x.id===e.target.value);const ds=(s?.service_durations||[]).map(x=>x.duration_minutes).sort((a,b)=>a-b);$('#pbDuration').innerHTML=ds.map(x=>`<option value="${x}">${x===60?'1 h':x===90?'1 h 30':x===120?'2 h':x+' min'}</option>`).join('');refreshPassOptions();participants()}
   function refreshPassOptions(){const serviceId=$('#pbService')?.value;const compatible=serviceId?passes.filter(p=>p.pass_services?.some(ps=>ps.service_id===serviceId)):passes;$('#pbPass').innerHTML='<option value="">Actividad suelta / sin bono</option>'+compatible.map(x=>`<option value="${x.id}">${esc(x.name)} · ${Number(x.remaining_credits)} créditos disp.</option>`).join('')}
   function participants(){const n=Math.max(1,Math.min(20,Number($('#pbCount')?.value||1))),box=$('#pbParticipants');if(!box)return;box.innerHTML=Array.from({length:n},(_,i)=>`<div class="card"><h3>Participante ${i+1}</h3><label>Nombre *<input data-p-name="${i}"></label><label><input style="width:auto" type="checkbox" data-p-minor="${i}"> Menor</label><label>Edad si es menor<input type="number" min="1" max="17" data-p-age="${i}"></label><label>Nivel<select data-p-level="${i}">${LEVELS.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label></div>`).join('');const selected=customers.find(x=>x.id===$('#pbCustomer')?.value);if(selected)prefillFirstParticipant(selected.full_name)}
-  async function createBooking(){const source=$('#pbSource').value,customer=$('#pbCustomer').value,service=$('#pbService').value,phone=$('#pbPhone').value.trim(),date=$('#pbDate').value,time=$('#pbTime').value,duration=Number($('#pbDuration').value),count=Number($('#pbCount').value),pass=$('#pbPass').value||null;if(!customer||!service||!phone||!date||!time||!duration)return toast('Completa cliente, teléfono, actividad, duración, fecha y hora.');const ps=Array.from({length:count},(_,i)=>({full_name:document.querySelector(`[data-p-name="${i}"]`).value.trim(),is_minor:document.querySelector(`[data-p-minor="${i}"]`).checked,age:document.querySelector(`[data-p-age="${i}"]`).value||null,rider_level:document.querySelector(`[data-p-level="${i}"]`).value,notes:null}));if(ps.some(x=>!x.full_name))return toast('Indica todos los nombres.');const srv=services.find(x=>x.id===service);if(ps.some(x=>x.is_minor&&Number(x.age)<Number(srv.minimum_age||0)))return toast(`Edad mínima: ${srv.minimum_age} años.`);const c=customers.find(x=>x.id===customer),btn=$('#pbCreate');btn.disabled=true;btn.textContent='Creando…';const {error}=await db.rpc('admin_create_booking',{p_customer_id:customer,p_full_name:c.full_name,p_contact_phone:phone,p_service_id:service,p_start_at:new Date(`${date}T${time}:00`).toISOString(),p_duration_minutes:duration,p_participants:ps,p_pass_id:pass,p_customer_notes:$('#pbNotes').value.trim()||null,p_booking_source:source});btn.disabled=false;btn.textContent='Crear reserva confirmada';if(error){console.error(error);const m=error.message||'';if(m.includes('TIME_OVERLAP'))return toast('El horario se solapa.');if(m.includes('PASS_REQUIRED'))return toast('Esta actividad requiere bono. Para un cliente nuevo, crea/asigna primero un bono.');return toast('No se pudo crear la reserva.');}toast('Reserva creada y confirmada.');await loadBase();setView('admin')}
-  const timer=setInterval(()=>{if(state.profile){install();clearInterval(timer)}},250);
+  async function createBooking() {
+  const source = $('#pbSource').value;
+  const customer = $('#pbCustomer').value;
+  const service = $('#pbService').value;
+  const phone = $('#pbPhone').value.trim();
+  const date = $('#pbDate').value;
+  const time = $('#pbTime').value;
+  const duration = Number($('#pbDuration').value);
+  const count = Number($('#pbCount').value);
+  const pass = $('#pbPass').value || null;
+
+  if (
+    !customer ||
+    !service ||
+    !phone ||
+    !date ||
+    !time ||
+    !duration
+  ) {
+    return toast(
+      'Completa cliente, teléfono, actividad, duración, fecha y hora.'
+    );
+  }
+
+  const participants = Array.from(
+    { length: count },
+    (_, index) => ({
+      full_name: document
+        .querySelector(`[data-p-name="${index}"]`)
+        .value
+        .trim(),
+
+      is_minor: document
+        .querySelector(`[data-p-minor="${index}"]`)
+        .checked,
+
+      age:
+        document.querySelector(`[data-p-age="${index}"]`).value ||
+        null,
+
+      rider_level: document
+        .querySelector(`[data-p-level="${index}"]`)
+        .value,
+
+      notes: null
+    })
+  );
+
+  if (participants.some(person => !person.full_name)) {
+    return toast('Indica todos los nombres.');
+  }
+
+  const selectedService = services.find(
+    item => item.id === service
+  );
+
+  if (
+    participants.some(
+      person =>
+        person.is_minor &&
+        Number(person.age) <
+          Number(selectedService.minimum_age || 0)
+    )
+  ) {
+    return toast(
+      `Edad mínima: ${selectedService.minimum_age} años.`
+    );
+  }
+
+  const start = new Date(`${date}T${time}:00`);
+
+  /*
+   * COMPROBACIÓN DEL AFORO RECOMENDADO
+   *
+   * Muestra:
+   * - ocupación actual;
+   * - clientes ya apuntados;
+   * - niveles;
+   * - resultado después de añadir la reserva;
+   * - advertencia si se supera 6/6.
+   */
+  if (
+    typeof window.checkAdminCapacityBeforeCreate ===
+    'function'
+  ) {
+    const capacityCheck =
+      await window.checkAdminCapacityBeforeCreate(
+        service,
+        start.toISOString(),
+        count
+      );
+
+    if (!capacityCheck.allow) {
+      return;
+    }
+  }
+
+  const selectedCustomer = customers.find(
+    item => item.id === customer
+  );
+
+  const button = $('#pbCreate');
+  button.disabled = true;
+  button.textContent = 'Creando…';
+
+  const { error } = await db.rpc(
+    'admin_create_booking',
+    {
+      p_customer_id: customer,
+      p_full_name: selectedCustomer.full_name,
+      p_contact_phone: phone,
+      p_service_id: service,
+      p_start_at: start.toISOString(),
+      p_duration_minutes: duration,
+      p_participants: participants,
+      p_pass_id: pass,
+      p_customer_notes:
+        $('#pbNotes').value.trim() || null,
+      p_booking_source: source
+    }
+  );
+
+  button.disabled = false;
+  button.textContent = 'Crear reserva confirmada';
+
+  if (error) {
+    console.error(error);
+
+    const message = error.message || '';
+
+    if (message.includes('TIME_OVERLAP')) {
+      return toast('El horario se solapa.');
+    }
+
+    if (message.includes('PASS_REQUIRED')) {
+      return toast(
+        'Esta actividad requiere bono. Para un cliente nuevo, crea o asigna primero un bono.'
+      );
+    }
+
+    if (message.includes('INSUFFICIENT_CREDITS')) {
+      return toast(
+        'El bono no tiene créditos suficientes.'
+      );
+    }
+
+    return toast('No se pudo crear la reserva.');
+  }
+
+  toast('Reserva creada y confirmada.');
+
+  await loadBase();
+
+  setView('admin');
+}
 })();
