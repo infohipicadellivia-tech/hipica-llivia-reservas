@@ -181,4 +181,10 @@
 
   setView('admin');
 }
+  const timer = setInterval(() => {
+  if (state.profile) {
+    install();
+    clearInterval(timer);
+  }
+}, 250);
 })();
