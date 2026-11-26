@@ -38,6 +38,8 @@
     style.id = 'calendarDetailsStyles';
     style.textContent = `
       .calendar-booking-list{margin-top:10px}
+      .calendar-session-summary{margin:10px 0 12px;padding:12px 14px;border-radius:11px;background:#eaf4ef;border-left:4px solid var(--green);font-weight:850;color:var(--text)}
+      .calendar-status-pill{font-size:11px;font-weight:850;border-radius:99px;padding:4px 8px;background:#e6f0eb;color:var(--green);white-space:nowrap}
       .calendar-booking-card{
         margin-top:8px;
         padding:12px;
@@ -170,13 +172,9 @@
             <article class="calendar-booking-card">
               <div class="row">
                 <div>
-                  <div class="calendar-booking-client">
-                    ${esc(booking.client_name || 'Cliente sin nombre')}
-                  </div>
-                  <div class="calendar-booking-meta">
-                    ${hhmm(booking.starts_at)}–${hhmm(booking.ends_at)}
-                    · ${esc(participantSummary(booking, bookingParticipants))}
-                    · ${esc(STATUS_LABELS[booking.status] || booking.status)}
+                  <div class="row" style="justify-content:flex-start;gap:8px">
+                    <div class="calendar-booking-client">${esc(booking.client_name || 'Cliente sin nombre')}</div>
+                    <span class="calendar-status-pill">${esc(STATUS_LABELS[booking.status] || booking.status)}</span>
                   </div>
                 </div>
               </div>
@@ -191,9 +189,35 @@
           `;
         }).join('');
 
+        const allParticipants = matching.flatMap(booking =>
+          participants.filter(person => person.booking_id === booking.booking_id)
+        );
+        const totalParticipants = matching.reduce(
+          (sum, booking) => sum + Number(booking.participant_count || 0),
+          0
+        );
+        const minors = allParticipants.filter(person => person.is_minor);
+        const adults = Math.max(0, totalParticipants - minors.length);
+        const composition = minors.length
+          ? ` (${[
+              adults > 0 ? `${adults} adulto${adults === 1 ? '' : 's'}` : null,
+              ...minors.map(person => person.age ? `${Number(person.age)} años` : 'menor')
+            ].filter(Boolean).join(', ')})`
+          : '';
+
+        const summary = document.createElement('div');
+        summary.className = 'calendar-session-summary';
+        summary.innerHTML = `Ocupación: ${totalParticipants}/6 · ${totalParticipants} participante${totalParticipants === 1 ? '' : 's'}${composition}`;
+
         const occupancy = host.querySelector('.notice');
-        if (occupancy) occupancy.insertAdjacentElement('beforebegin', list);
-        else host.appendChild(list);
+        if (occupancy) {
+          occupancy.style.display = 'none';
+          occupancy.insertAdjacentElement('beforebegin', list);
+          list.insertAdjacentElement('beforebegin', summary);
+        } else {
+          host.appendChild(summary);
+          host.appendChild(list);
+        }
 
         slot.dataset.bookingDetailsLoaded = '1';
       }
@@ -389,4 +413,3 @@
     }
   }, 250);
 })();
-
