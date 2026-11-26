@@ -112,7 +112,15 @@
       const end=new Date(start.getTime()+duration*60000);
       const overlapsHere=closed?[]:dayBookings.filter(b=>overlaps(start,end,b));
       const exact=dayBookings.filter(b=>Math.abs(new Date(b.starts_at)-start)<60000);
-      const conflict=overlapsHere.length>1;
+      const activityGroups = new Set(
+  overlapsHere.map(booking => [
+    booking.service_id,
+    new Date(booking.starts_at).getTime(),
+    new Date(booking.ends_at).getTime()
+  ].join('|'))
+);
+
+const conflict = activityGroups.size > 1;
       pieces.push(`<div class="calendar-slot ${closed?'calendar-closed':(overlapsHere.length?'calendar-booked':'calendar-free')}">
         <div class="calendar-entry"><div class="calendar-slot-time">${time}</div><div>
           <div class="row"><strong>${esc(effectiveService?.name||'Actividad')}</strong><span class="calendar-badge ${rule.flexible?'flex':''}">${rule.flexible?'Flexible':'Preferente'}</span></div>
