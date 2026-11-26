@@ -35,7 +35,8 @@
   }
 
   async function openClient(id){
-    selected=clients.find(x=>x.client_id===id);if(!selected)return;
+    selected=clients.find(x=>x.client_id===id);
+    if(!selected){await openClients();selected=clients.find(x=>x.client_id===id);if(!selected)return;}
     const [bookings,passes,products]=await Promise.all([
       db.from('booking_schedule').select('*').eq('client_id',selected.client_id).order('starts_at',{ascending:false}).limit(20),
       db.from('passes').select('*').eq('client_id',selected.client_id).order('created_at',{ascending:false}),
@@ -44,6 +45,7 @@
     content.innerHTML=`<button id="clientBack" class="ghost">← Clientes</button>
       <section class="hero"><h2>${esc(selected.full_name)}</h2><div>${esc(selected.phone||'')}${selected.email?' · '+esc(selected.email):''}</div></section>
       <div class="grid">
+        <button id="editClient" class="secondary service-card" type="button"><strong>✏️ Editar datos</strong><div class="muted">Nombre, teléfono, email y observaciones</div></button>
         <button id="contactPrefs" class="secondary service-card" type="button"><strong>📞 Preferencias de contacto</strong><div class="muted">Canales para reservas y bonos</div></button>
         <button id="clientFiles" class="secondary service-card" type="button"><strong>📎 Archivos</strong><div class="muted">Fotos y documentos internos</div></button>
         <button id="clientHorses" class="secondary service-card" type="button"><strong>🐴 Caballos</strong><div class="muted">Pupilaje y ficha equina</div></button>
@@ -54,36 +56,15 @@
       ${(passes.data||[]).map(p=>`<article class="card"><div class="row"><div><h3>${esc(p.name)}</h3><div class="muted">${p.purchase_price!=null?Number(p.purchase_price)+' € · ':''}${esc(p.status)}</div></div><div class="metric">${Number(p.remaining_credits)}</div></div><div class="muted">de ${Number(p.initial_credits)} créditos${p.expires_at?' · caduca '+new Date(p.expires_at+'T12:00:00').toLocaleDateString('es-ES'):''}</div><div class="admin-actions"><button class="secondary" data-adjust="${p.id}" data-delta="1" type="button">+1 crédito</button><button class="ghost" data-adjust="${p.id}" data-delta="-1" type="button">-1 crédito</button><button class="ghost" data-moves="${p.id}" type="button">Movimientos</button></div></article>`).join('')||'<div class="card muted">Sin bonos.</div>'}
       <h2>Últimas reservas</h2>${(bookings.data||[]).map(b=>`<div class="card row"><div><strong>${esc(b.service_name)}</strong><div class="muted">${formatDate(b.starts_at)} · ${formatHour(b.starts_at)} · ${b.participant_count||1} persona(s)</div></div><span class="status ${b.status}">${esc(b.status)}</span></div>`).join('')||'<div class="card muted">Sin reservas.</div>'}`;
 
-  $('#clientBack').onclick=()=>renderList();
-
-$('#contactPrefs').onclick=()=>
-  window.openCustomerContactPreferences
-    ? window.openCustomerContactPreferences(id)
-    : toast('No se ha cargado Preferencias de contacto.');
-
-$('#clientFiles').onclick=()=>
-  window.openCustomerFiles
-    ? window.openCustomerFiles(id)
-    : toast('No se ha cargado el módulo de archivos. Revisa index.html.');
-
-$('#clientHorses').onclick=()=>
-  window.openCustomerHorses
-    ? window.openCustomerHorses(id)
-    : toast('No se ha cargado el módulo de Caballos. Revisa index.html.');
-
-$('#issuePass').onclick=()=>issuePass(id);
-
-content.querySelectorAll('[data-adjust]').forEach(
-  b=>b.onclick=()=>adjustPass(
-    b.dataset.adjust,
-    Number(b.dataset.delta)
-  )
-);
-
-content.querySelectorAll('[data-moves]').forEach(
-  b=>b.onclick=()=>showMovements(b.dataset.moves)
-);
-    }
+    $('#clientBack').onclick=()=>renderList();
+    $('#editClient').onclick=()=>window.openAdminCustomerEditor?window.openAdminCustomerEditor(id):toast('No se ha cargado el módulo de edición de clientes.');
+    $('#contactPrefs').onclick=()=>window.openCustomerContactPreferences?window.openCustomerContactPreferences(id):toast('No se ha cargado Preferencias de contacto.');
+    $('#clientFiles').onclick=()=>window.openCustomerFiles?window.openCustomerFiles(id):toast('No se ha cargado el módulo de archivos. Revisa index.html.');
+    $('#clientHorses').onclick=()=>window.openCustomerHorses?window.openCustomerHorses(id):toast('No se ha cargado el módulo de Caballos. Revisa index.html.');
+    $('#issuePass').onclick=()=>issuePass(id);
+    content.querySelectorAll('[data-adjust]').forEach(b=>b.onclick=()=>adjustPass(b.dataset.adjust,Number(b.dataset.delta)));
+    content.querySelectorAll('[data-moves]').forEach(b=>b.onclick=()=>showMovements(b.dataset.moves));
+  }
 
   async function issuePass(clientId){
     const code=$('#productSelect').value,expiry=$('#passExpiry').value||null;
@@ -97,7 +78,7 @@ content.querySelectorAll('[data-moves]').forEach(
     const reason=prompt(`Motivo del ajuste de ${delta>0?'+':''}${delta} crédito:`);if(!reason)return;
     const {error}=await db.rpc('adjust_pass_balance',{p_pass_id:passId,p_delta:delta,p_reason:reason});
     if(error){console.error(error);return toast('No se pudo ajustar el saldo.');}
-    toast('Saldo actualizado.');await openClients();await openClient(selected.client_id);
+    toast('Saldo actualizado.');const id=selected.client_id;await openClients();await openClient(id);
   }
 
   async function showMovements(passId){
@@ -108,5 +89,8 @@ content.querySelectorAll('[data-moves]').forEach(
   }
 
   const timer=setInterval(()=>{if(state.profile){install();clearInterval(timer)}},250);
+  window.openAdminClients=openClients;
+  window.openAdminClient=openClient;
   window.openClientFromPreferences=(clientId)=>openClient(clientId);
 })();
+
