@@ -326,24 +326,17 @@
   }
 
   function returnToCalendar() {
-    if (returnCalendarDate) {
-      setView('admin');
-      setTimeout(() => {
-        const open = document.querySelector('#openAdminCalendar');
-        if (open) open.click();
-        setTimeout(() => {
-          const jump = document.querySelector('#jumpDate');
-          const jumpBtn = document.querySelector('#jumpBtn');
-          if (jump && jumpBtn) {
-            jump.value = returnCalendarDate;
-            jumpBtn.click();
-          }
-        }, 150);
-      }, 100);
+    if (typeof window.openAdminCalendarAtDate === 'function' && returnCalendarDate) {
+      window.openAdminCalendarAtDate(returnCalendarDate, returnCalendarMode || 'today');
       return;
     }
+
+    if (typeof window.reopenAdminCalendar === 'function') {
+      window.reopenAdminCalendar(returnCalendarMode || 'today');
+      return;
+    }
+
     setView('admin');
-    setTimeout(() => document.querySelector('#openAdminCalendar')?.click(), 100);
   }
 
   installStyles();
