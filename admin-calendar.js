@@ -352,6 +352,20 @@ const conflict = activityGroups.size > 1;
       bindFlexibleActions();
     }catch(e){console.error(e);content.innerHTML='<button id="calendarBack" class="ghost" type="button">← Volver</button><div class="card error">No se pudo cargar el calendario. Verifica que ejecutaste motor_calendario_v1.sql.</div>';document.querySelector('#calendarBack').onclick=()=>setView('admin')}
   }
+window.reopenAdminCalendar = (mode = calendarMode) =>
+  openCalendar(mode);
 
+window.openAdminCalendarAtDate = (
+  dateKey,
+  mode = 'today'
+) => {
+  if (dateKey) {
+    anchorDate = startOfDay(
+      new Date(dateKey + 'T12:00:00')
+    );
+  }
+
+  return openCalendar(mode);
+};
   const timer=setInterval(()=>{if(state.profile){installCalendarButton();clearInterval(timer)}},250);
 })();
