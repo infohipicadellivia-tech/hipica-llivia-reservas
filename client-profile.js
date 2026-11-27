@@ -2,16 +2,25 @@
   const isCustomer=()=>state.profile?.role==='customer';
   let client=null;
 
-  function installProfileNav(){
-    if(!isCustomer() || document.querySelector('[data-view="profile"]')) return;
-    const nav=document.querySelector('.bottom-nav');
-    if(!nav)return;
-    nav.style.gridTemplateColumns=`repeat(${nav.querySelectorAll('button').length},1fr)`;
-    const b=document.createElement('button');
-    b.type='button';b.dataset.view='profile';b.innerHTML='<span class="nav-icon">👤</span>
-<span>Perfil</span>';
-    b.onclick=()=>setView('profile');nav.appendChild(b);
-  }
+ function installProfileNav(){
+  if(!isCustomer() || document.querySelector('[data-view="profile"]')) return;
+
+  const nav=document.querySelector('.bottom-nav');
+  if(!nav) return;
+
+  const b=document.createElement('button');
+  b.type='button';
+  b.dataset.view='profile';
+  b.innerHTML='<span class="nav-icon">👤</span><span>Perfil</span>';
+  b.onclick=()=>setView('profile');
+
+  nav.appendChild(b);
+
+  nav.style.setProperty(
+    '--nav-items',
+    nav.querySelectorAll('button').length
+  );
+}
 
   async function loadClient(){
     const r=await db.from('customers').select('*').eq('auth_user_id',state.user.id).single();
