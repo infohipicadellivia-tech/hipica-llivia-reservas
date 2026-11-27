@@ -125,3 +125,58 @@
     font-size:12px;
   }
 }
+/* Ajustes generales móvil */
+@media(max-width:520px){
+
+  input,
+  textarea,
+  select{
+    font-size:16px;
+    padding:13px 12px;
+  }
+
+  button,
+  .slot{
+    min-height:44px;
+  }
+
+  .primary,
+  .secondary,
+  .ghost{
+    touch-action:manipulation;
+  }
+
+  .notice{
+    font-size:13px;
+    line-height:1.45;
+  }
+
+  .service-card{
+    padding:14px;
+  }
+
+  #myHorsePhoto img{
+    max-height:260px !important;
+  }
+}
+
+/* Cards en móviles estrechos */
+@media(max-width:420px){
+
+  .card.row{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .card.row .status{
+    align-self:flex-start;
+  }
+}
+
+/* Protección de la cabecera */
+.topbar h1{
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
