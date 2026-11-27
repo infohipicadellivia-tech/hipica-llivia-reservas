@@ -43,15 +43,7 @@ function renderHome(){
     )[0];
 
   content.innerHTML=`
-    <div class="home-logo-wrap">
-      <img
-        src="logo-hipica.png"
-        alt="Hípica de Llívia"
-        class="home-logo-small"
-      >
-    </div>
-
-    <section class="hero">
+      <section class="hero">
       <h2>Hola, ${esc(state.profile?.full_name||state.user.email)}</h2>
       <div>Tienes ${credits} créditos disponibles</div>
     </section>
