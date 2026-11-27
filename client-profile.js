@@ -6,7 +6,7 @@
     if(!isCustomer() || document.querySelector('[data-view="profile"]')) return;
     const nav=document.querySelector('.bottom-nav');
     if(!nav)return;
-    nav.style.gridTemplateColumns='repeat(5,1fr)';
+    nav.style.gridTemplateColumns=`repeat(${nav.querySelectorAll('button').length},1fr)`;
     const b=document.createElement('button');
     b.type='button';b.dataset.view='profile';b.innerHTML='<span class="nav-icon">👤</span>
 <span>Perfil</span>';
