@@ -87,7 +87,31 @@ function chooseSlot(id){state.reserve.slot=state.slots.find(s=>s.time_slot_id===
 function friendlyError(e){const t=(e?.message||'').toUpperCase();const map={SLOT_NOT_FOUND:'Este horario ya no está disponible.',SLOT_NOT_AVAILABLE:'Este horario ya no está disponible.',SLOT_FULL:'Esta sesión acaba de quedarse sin plazas.',DUPLICATE_BOOKING:'Ya tienes una solicitud o reserva para esta sesión.',PASS_REQUIRED:'Necesitas un bono para reservar esta actividad.',PASS_NOT_FOUND:'No hemos podido encontrar el bono seleccionado.',PASS_NOT_ACTIVE:'Este bono ya no está activo.',PASS_OUTSIDE_VALIDITY:'Este bono no es válido en esta fecha.',INSUFFICIENT_CREDITS:'No tienes suficientes sesiones disponibles.',PASS_NOT_VALID_FOR_SERVICE:'Este bono no puede utilizarse para esta actividad.'};return Object.entries(map).find(([k])=>t.includes(k))?.[1]||'No hemos podido realizar la solicitud. Inténtalo de nuevo.'}
 async function requestBooking(){const btn=$('#requestBtn');btn.disabled=true;btn.textContent='Enviando…';const r=state.reserve;const {error}=await db.rpc('request_booking',{p_time_slot_id:r.slot.time_slot_id,p_pass_id:r.pass.id,p_customer_notes:r.notes.trim()||null});if(error){toast(friendlyError(error));btn.disabled=false;btn.textContent='Solicitar reserva';if((error.message||'').match(/SLOT_FULL|SLOT_NOT_AVAILABLE/)){state.slots=await getSlots(r.service.id);r.step=2;renderReserve()}return}await loadBase();toast('Solicitud enviada correctamente.');state.reserve={step:1,service:null,slot:null,pass:null,notes:''};setView('bookings')}
 function render(){if(state.view==='home')renderHome();else if(state.view==='passes')renderPasses();else if(state.view==='bookings')renderBookings();else renderReserve()}
-async function enter(session){state.user=session.user;$('#loginView').classList.add('hidden');$('#privateView').classList.remove('hidden');await loadBase();setView('home')}
+async function enter(session){
+  state.user=session.user;
+
+  $('#loginView').classList.add('hidden');
+  $('#privateView').classList.remove('hidden');
+
+  await loadBase();
+
+  const params=new URLSearchParams(window.location.search);
+  const requestedView=params.get('view');
+
+  const allowedViews=[
+    'home',
+    'reserve',
+    'bookings',
+    'passes'
+  ];
+
+  const initialView=allowedViews.includes(requestedView)
+    ? requestedView
+    : 'home';
+
+  setView(initialView);
+}
+
 $('#loginForm').onsubmit=async e=>{e.preventDefault();$('#loginError').textContent='';const {data,error}=await db.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#password').value});if(error){$('#loginError').textContent='Email o contraseña incorrectos.';return}await enter(data.session)};
 $('#logoutBtn').onclick=async()=>{await db.auth.signOut();state.user=null;$('#privateView').classList.add('hidden');$('#loginView').classList.remove('hidden')};
 document.querySelectorAll('.bottom-nav button').forEach(b=>b.onclick=()=>setView(b.dataset.view));
