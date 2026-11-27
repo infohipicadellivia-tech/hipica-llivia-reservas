@@ -52,9 +52,8 @@
     font-size:11px;
   }
 }
-
-/* Móviles estrechos */
-@media (max-width:360px){
+/* Navegación móvil estrecha */
+@media(max-width:360px){
   .bottom-nav .nav-icon{
     font-size:20px;
   }
@@ -62,23 +61,67 @@
   .bottom-nav button > span:last-child{
     font-size:9px;
   }
-  /* Inicio cliente */
-.home-logo-wrap{
-  text-align:center;
-  padding:4px 0 12px;
-}
-
-.home-logo-small{
-  display:block;
-  width:150px;
-  max-width:48vw;
-  height:auto;
-  margin:0 auto;
-  object-fit:contain;
-}
 
   .bottom-nav button{
     padding-left:1px;
     padding-right:1px;
+  }
+}
+
+/* Cabecera con logo */
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:5;
+
+  display:grid;
+  grid-template-columns:minmax(70px,1fr) auto minmax(70px,1fr);
+  align-items:center;
+  gap:8px;
+
+  padding:14px 18px;
+  background:#fff;
+  border-bottom:1px solid var(--line);
+}
+
+.topbar h1{
+  margin:0;
+  justify-self:start;
+  font-size:23px;
+}
+
+.topbar-logo{
+  display:block;
+  width:105px;
+  max-width:30vw;
+  height:auto;
+  object-fit:contain;
+  justify-self:center;
+}
+
+.topbar #logoutBtn{
+  justify-self:end;
+}
+
+/* Cabecera en móviles estrechos */
+@media(max-width:360px){
+  .topbar{
+    gap:5px;
+    padding-left:12px;
+    padding-right:12px;
+  }
+
+  .topbar-logo{
+    width:82px;
+    max-width:26vw;
+  }
+
+  .topbar h1{
+    font-size:18px;
+  }
+
+  .topbar #logoutBtn{
+    padding:7px 8px;
+    font-size:12px;
   }
 }
