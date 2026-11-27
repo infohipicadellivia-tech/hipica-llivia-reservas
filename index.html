@@ -31,12 +31,27 @@
         <button id="logoutBtn" class="ghost" type="button">Salir</button>
       </header>
       <div id="content" class="content"></div>
-      <nav class="bottom-nav" aria-label="Navegación principal">
-        <button data-view="home" class="active" type="button">⌂<span>Inicio</span></button>
-        <button data-view="reserve" type="button">＋<span>Reservar</span></button>
-        <button data-view="bookings" type="button">▣<span>Reservas</span></button>
-        <button data-view="passes" type="button">◉<span>Bonos</span></button>
-      </nav>
+     <nav class="bottom-nav" aria-label="Navegación principal">
+  <button data-view="home" class="active" type="button">
+    <span class="nav-icon">🏠</span>
+    <span>Inicio</span>
+  </button>
+
+  <button data-view="reserve" type="button">
+    <span class="nav-icon">➕</span>
+    <span>Reservar</span>
+  </button>
+
+  <button data-view="bookings" type="button">
+    <span class="nav-icon">📅</span>
+    <span>Reservas</span>
+  </button>
+
+  <button data-view="passes" type="button">
+    <span class="nav-icon">🎟️</span>
+    <span>Bonos</span>
+  </button>
+</nav>
     </section>
   </main>
   <script src="app.js"></script>
