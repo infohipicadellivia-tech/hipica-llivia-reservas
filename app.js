@@ -21,7 +21,197 @@ async function loadBase(){
 }
 function setView(v){state.view=v;document.querySelectorAll('.bottom-nav button').forEach(x=>x.classList.toggle('active',x.dataset.view===v));$('#pageTitle').textContent={home:'Inicio',reserve:'Reservar',bookings:'Mis reservas',passes:'Mis bonos'}[v];render()}
 function bookingCard(b){const slot=b.time_slots||{},sv=slot.services||{};return `<article class="card row"><div><h3>${esc(sv.name||'Actividad')}</h3><div class="muted">${slot.starts_at?esc(formatDate(slot.starts_at))+' · '+esc(formatHour(slot.starts_at)):'Horario no disponible'}</div></div><span class="status ${b.status}">${esc(statusLabel[b.status]||b.status)}</span></article>`}
-function renderHome(){const active=state.passes.filter(p=>p.status==='active');const credits=active.reduce((a,p)=>a+Number(p.remaining_credits||0),0);const next=[...state.bookings].filter(b=>['pending','confirmed'].includes(b.status)&&b.time_slots?.starts_at&&new Date(b.time_slots.starts_at)>new Date()).sort((a,b)=>new Date(a.time_slots.starts_at)-new Date(b.time_slots.starts_at))[0];content.innerHTML=`<section class="hero"><h2>Hola, ${esc(state.profile?.full_name||state.user.email)}</h2><div>Tienes ${credits} sesiones disponibles</div></section><div class="grid"><button class="service-card" data-go="reserve"><div class="metric">＋</div><h3>Nueva reserva</h3><div class="muted">Solicita día y hora</div></button><button class="service-card" data-go="passes"><div class="metric">${credits}</div><h3>Mis bonos</h3><div class="muted">${active.length} bono(s) activo(s)</div></button></div><h2>Próxima actividad</h2>${next?bookingCard(next):'<div class="card muted">No tienes próximas reservas.</div>'}`;content.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>setView(b.dataset.go))}
+function renderHome(){
+  const active=state.passes.filter(p=>p.status==='active');
+
+  const credits=active.reduce(
+    (total,p)=>total+Number(p.remaining_credits||0),
+    0
+  );
+
+  const initialCredits=active.reduce(
+    (total,p)=>total+Number(p.initial_credits||0),
+    0
+  );
+
+  const creditPercentage=initialCredits>0
+    ? Math.max(0,Math.min(100,(credits/initialCredits)*100))
+    : 0;
+
+  const next=[...state.bookings]
+    .filter(
+      b=>
+        ['pending','confirmed'].includes(b.status) &&
+        b.time_slots?.starts_at &&
+        new Date(b.time_slots.starts_at)>new Date()
+    )
+    .sort(
+      (a,b)=>
+        new Date(a.time_slots.starts_at)-
+        new Date(b.time_slots.starts_at)
+    )[0];
+
+  const fullName=
+    state.profile?.full_name ||
+    state.user?.email ||
+    '';
+
+  const firstName=fullName.trim().split(' ')[0];
+
+  let nextBookingHtml=`
+    <section class="home-empty">
+      <div class="home-empty-icon">📅</div>
+      <h3>No tienes próximas reservas</h3>
+      <p class="muted">
+        Cuando quieras, puedes solicitar una nueva actividad.
+      </p>
+      <button class="secondary" data-go="reserve" type="button">
+        ➕ Nueva reserva
+      </button>
+    </section>
+  `;
+
+  if(next){
+    const slot=next.time_slots||{};
+    const service=slot.services||{};
+
+    nextBookingHtml=`
+      <section class="home-next-booking">
+        <div class="home-section-label">
+          PRÓXIMA RESERVA
+        </div>
+
+        <div class="home-booking-top">
+          <div>
+            <h2>${esc(service.name||'Actividad')}</h2>
+
+            <div class="home-booking-date">
+              📅 ${esc(formatDate(slot.starts_at))}
+            </div>
+
+            <div class="home-booking-details">
+              🕐 ${esc(formatHour(slot.starts_at))}
+              ${service.duration_minutes
+                ? ` · ${service.duration_minutes} min`
+                : ''
+              }
+            </div>
+          </div>
+
+          <span class="status ${next.status}">
+            ${esc(statusLabel[next.status]||next.status)}
+          </span>
+        </div>
+
+        <button
+          class="home-text-button"
+          data-go="bookings"
+          type="button"
+        >
+          Ver mis reservas →
+        </button>
+      </section>
+    `;
+  }
+
+  content.innerHTML=`
+    <section class="home-brand">
+      <img
+        src="logo-hipica.png"
+        alt="Hípica de Llívia"
+        class="home-logo"
+      >
+
+      <div class="home-welcome">
+        <h2>Hola, ${esc(firstName)} 👋</h2>
+        <p>Tu espacio personal en la Hípica</p>
+      </div>
+    </section>
+
+    ${nextBookingHtml}
+
+    <section class="home-credit-card">
+      <div class="home-credit-heading">
+        <div>
+          <div class="home-section-label">TU BONO</div>
+          <h3>🎟️ Saldo disponible</h3>
+        </div>
+
+        <div class="home-credit-number">
+          ${credits.toLocaleString('es-ES')}
+        </div>
+      </div>
+
+      <div class="home-credit-copy">
+        créditos disponibles
+      </div>
+
+      ${
+        initialCredits>0
+          ? `
+            <div
+              class="home-credit-progress"
+              role="progressbar"
+              aria-valuenow="${Math.round(creditPercentage)}"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-label="Saldo disponible del bono"
+            >
+              <span style="width:${creditPercentage}%"></span>
+            </div>
+          `
+          : ''
+      }
+
+      <div class="home-credit-footer">
+        <span>
+          ${active.length}
+          ${active.length===1?'bono activo':'bonos activos'}
+        </span>
+
+        <button
+          class="home-text-button"
+          data-go="passes"
+          type="button"
+        >
+          Ver bonos →
+        </button>
+      </div>
+    </section>
+
+    <section class="home-actions">
+      <button
+        class="home-action-card"
+        data-go="reserve"
+        type="button"
+      >
+        <span class="home-action-icon">➕</span>
+        <span>
+          <strong>Nueva reserva</strong>
+          <small>Solicita una actividad</small>
+        </span>
+      </button>
+
+      <button
+        class="home-action-card"
+        data-go="bookings"
+        type="button"
+      >
+        <span class="home-action-icon">📅</span>
+        <span>
+          <strong>Mis reservas</strong>
+          <small>Consulta y gestiona</small>
+        </span>
+      </button>
+    </section>
+  `;
+
+  content.querySelectorAll('[data-go]').forEach(
+    button=>{
+      button.onclick=()=>setView(button.dataset.go);
+    }
+  );
+}
 function renderPasses(){content.innerHTML=state.passes.length?state.passes.map(p=>`<article class="card"><div class="row"><div><h3>${esc(p.name)}</h3><div class="muted">${p.expires_at?'Caduca: '+new Date(p.expires_at+'T00:00:00').toLocaleDateString('es-ES'):'Sin caducidad'}</div></div><div class="metric">${Number(p.remaining_credits)}</div></div><p class="muted">${Number(p.initial_credits)-Number(p.remaining_credits)} consumidas · ${Number(p.remaining_credits)} disponibles · ${esc(p.status)}</p><p>${(p.pass_services||[]).map(x=>esc(x.services?.name||'')).filter(Boolean).join(' · ')}</p></article>`).join(''):'<div class="card muted">No tienes bonos.</div>'}
 function renderBookings(){content.innerHTML=state.bookings.length?state.bookings.map(bookingCard).join(''):'<div class="card muted">Todavía no tienes reservas.</div>'}
 async function getSlots(serviceId){const {data,error}=await db.from('slot_availability').select('*').eq('service_id',serviceId).eq('status','open').gt('starts_at',new Date().toISOString()).gt('available_places',0).order('starts_at');if(error){toast('No se pudo cargar la disponibilidad.');return []}return data||[]}
