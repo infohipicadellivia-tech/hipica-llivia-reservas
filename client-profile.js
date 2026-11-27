@@ -8,7 +8,8 @@
     if(!nav)return;
     nav.style.gridTemplateColumns='repeat(5,1fr)';
     const b=document.createElement('button');
-    b.type='button';b.dataset.view='profile';b.innerHTML='●<span>Perfil</span>';
+    b.type='button';b.dataset.view='profile';b.innerHTML='<span class="nav-icon">👤</span>
+<span>Perfil</span>';
     b.onclick=()=>setView('profile');nav.appendChild(b);
   }
 
