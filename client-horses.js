@@ -12,7 +12,7 @@
     horses=r.data||[];
     if(!horses.length)return;
     const nav=document.querySelector('.bottom-nav');if(!nav)return;
-    const b=document.createElement('button');b.type='button';b.dataset.view='my-horse';b.innerHTML='🐴<span>Mi caballo</span>';b.onclick=()=>setView('my-horse');
+    const b=document.createElement('button');b.type='button';b.dataset.view='my-horse';b.innerHTML='<span class="nav-icon">🐴</span><span>Mi caballo</span>';b.onclick=()=>setView('my-horse');
     const profile=nav.querySelector('[data-view="profile"]');profile?nav.insertBefore(b,profile):nav.appendChild(b);
     nav.style.gridTemplateColumns=`repeat(${nav.querySelectorAll('button').length},1fr)`;
   }
